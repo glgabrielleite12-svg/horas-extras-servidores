@@ -6,6 +6,9 @@
 <title>Gestão de Horas Extras</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial}
   .fade{animation:fade .25s ease}
@@ -55,7 +58,7 @@
           <input name="matricula" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Sua matrícula funcional">
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Chefia <span class="text-rose-500">*</span></label>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Setor <span class="text-rose-500">*</span></label>
           <select name="chefia_id" id="signup-chefia" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"></select>
         </div>
         <div>
@@ -67,7 +70,7 @@
           <input name="password" type="password" required minlength="6" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="mínimo 6 caracteres">
         </div>
         <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition">Criar conta</button>
-        <p class="text-xs text-slate-400">Escolha a sua chefia (unidade). O 1º cadastro do sistema vira RH.</p>
+        <p class="text-xs text-slate-400">Escolha o seu setor. O 1º cadastro do sistema vira RH.</p>
       </form>
 
       <p id="auth-msg" class="mt-4 text-sm hidden rounded-lg px-3 py-2"></p>
@@ -122,7 +125,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const PAPEL_LABEL = { servidor:"Servidor", chefia:"Chefia", rh:"RH / Administração" };
 const MIN_JUST = 20;
-let SESSION=null, PERFIL=null, CURRENT_TAB=null, CFG={teto_diario_horas:2};
+let SESSION=null, PERFIL=null, CURRENT_TAB=null, CFG={teto_diario_horas:2, mes_aberto:null};
 
 // ====================== HELPERS ======================
 const $ = s => document.querySelector(s);
@@ -134,6 +137,8 @@ const thisMonth = () => new Date().toISOString().slice(0,7);
 const hoje = () => new Date().toISOString().slice(0,10);
 function monthRange(comp){ const [y,m]=comp.split("-").map(Number); return {ini:`${comp}-01`, fim:new Date(y,m,1).toISOString().slice(0,10)}; }
 function compLabel(comp){ return new Date(comp+"-01").toLocaleDateString("pt-BR",{month:"long",year:"numeric"}); }
+function mesAno(comp){ const d=new Date(comp+"-01"); const m=d.toLocaleDateString("pt-BR",{month:"long"}); return m.charAt(0).toUpperCase()+m.slice(1)+"/"+comp.slice(0,4); }
+function ultimoDia(comp){ const [y,m]=comp.split("-").map(Number); return `${comp}-`+String(new Date(y,m,0).getDate()).padStart(2,"0"); }
 
 function toast(msg, tipo="ok"){
   const c={ok:"bg-emerald-600",err:"bg-rose-600",info:"bg-slate-800"}[tipo];
@@ -201,10 +206,10 @@ async function carregarChefiasSignup(){
   try{
     const { data, error } = await sb.rpc("he_chefias_publicas");
     if(error || !data || !data.length){
-      sel.innerHTML='<option value="">— nenhuma chefia cadastrada ainda —</option>';
+      sel.innerHTML='<option value="">— nenhum setor cadastrado ainda —</option>';
       sel.required=false; return;
     }
-    sel.innerHTML='<option value="">— selecione sua chefia —</option>'+data.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join("");
+    sel.innerHTML='<option value="">— selecione seu setor —</option>'+data.map(c=>`<option value="${c.id}">${esc(c.nome)}${c.sigla?" ("+esc(c.sigla)+")":""}</option>`).join("");
     sel.required=true;
   }catch(_){ sel.innerHTML='<option value="">—</option>'; sel.required=false; }
 }
@@ -230,7 +235,7 @@ function renderHeader(){
   $("#hdr-avatar").textContent=(n||"?").trim().charAt(0).toUpperCase();
 }
 function tabsFor(p){
-  if(p==="rh") return [["painel","Painel"],["lancamentos","Lançamentos"],["servidores","Servidores"],["chefias","Chefias"],["acessos","Acessos"],["dias","Dias bloqueados"],["relatorio","Relatório"],["parametros","Parâmetros"]];
+  if(p==="rh") return [["painel","Painel"],["lancamentos","Lançamentos"],["servidores","Servidores"],["chefias","Chefias"],["ajustes","Ajustes"],["relatorio","Relatório"]];
   if(p==="chefia") return [["aprovacoes","Conferência"],["equipe","Equipe"],["meus","Meus lançamentos"]];
   return [["meus","Meus lançamentos"]];
 }
@@ -246,7 +251,7 @@ function go(tab){
     const on=b.dataset.tab===tab;
     b.className=`navbtn whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 ${on?"border-indigo-600 text-indigo-700":"border-transparent text-slate-500 hover:text-indigo-600"}`;
   });
-  const fn={meus:viewMeus,aprovacoes:viewAprovacoes,equipe:viewEquipe,painel:viewPainel,lancamentos:viewLancamentos,servidores:viewServidores,chefias:viewChefias,acessos:viewAcessos,dias:viewDias,relatorio:viewRelatorio,parametros:viewParametros}[tab];
+  const fn={meus:viewMeus,aprovacoes:viewAprovacoes,equipe:viewEquipe,painel:viewPainel,lancamentos:viewLancamentos,servidores:viewServidores,chefias:viewChefias,ajustes:viewAjustes,relatorio:viewRelatorio}[tab];
   $("#content").innerHTML=`<div class="text-slate-400 text-sm py-10 text-center">Carregando…</div>`;
   fn&&fn();
 }
@@ -269,6 +274,10 @@ async function getServidores(){
 async function getChefias(){
   const {data,error}=await sb.from("he_chefias").select("*").order("nome");
   if(error){toast(error.message,"err");return[];}
+  return data||[];
+}
+async function getPerfis(){
+  const {data}=await sb.from("he_perfis").select("*");
   return data||[];
 }
 async function getBloqueados(comp){
@@ -301,7 +310,7 @@ function tabela(rows,{servidor=true,retorno=false,acoes=null,justificativa=true}
     </tr></thead><tbody>
     ${rows.map(r=>`<tr class="border-b border-slate-100 hover:bg-slate-50 align-top">
       <td class="px-3 py-2 text-sm whitespace-nowrap">${fmtData(r.data)}</td>
-      ${servidor?`<td class="px-3 py-2 text-sm"><div class="font-medium">${esc(r.servidor_nome)}</div><div class="text-xs text-slate-400">${esc(r.matricula||"")}${r.chefia_nome?" · "+esc(r.chefia_nome):""}</div></td>`:""}
+      ${servidor?`<td class="px-3 py-2 text-sm"><div class="font-medium">${esc(r.servidor_nome)}</div><div class="text-xs text-slate-400">${esc(r.matricula||"")}${r.chefia_sigla?" · "+esc(r.chefia_sigla):""}</div></td>`:""}
       <td class="px-3 py-2 text-sm text-center whitespace-nowrap">${hh(r.horas)}</td>
       ${justificativa?`<td class="px-3 py-2 text-sm max-w-xs"><div class="line-clamp-2">${esc(r.justificativa)}</div></td>`:""}
       <td class="px-3 py-2 text-center">${statusBadge(r.status)}</td>
@@ -314,24 +323,36 @@ function tabela(rows,{servidor=true,retorno=false,acoes=null,justificativa=true}
 // ====================== NOVO LANÇAMENTO ======================
 async function novoLancamento(ctx){
   const isRH = ctx && ctx.rh;
-  let servidores=[];
-  if(isRH) servidores=await getServidores();
-  const maxAttr = isRH ? "" : `max="${CFG.teto_diario_horas}"`;
+  const servFixoRH = isRH && ctx.servidorFixo;
+  let servidores=[], servNome="";
+  if(isRH && !servFixoRH) servidores=await getServidores();
+  if(servFixoRH){ const sv=(window.__servidores||[]).find(x=>x.id===servFixoRH); servNome=sv?sv.nome:""; }
+  // limites de data
+  let minAttr="", maxAttr=`max="${hoje()}"`, hint="";
+  if(!isRH && CFG.mes_aberto){
+    const ini=CFG.mes_aberto+"-01", fim=ultimoDia(CFG.mes_aberto);
+    minAttr=`min="${ini}"`; maxAttr=`max="${fim < hoje() ? fim : hoje()}"`;
+    hint=`<p class="text-xs text-amber-600">Lançamentos liberados apenas para ${compLabel(CFG.mes_aberto)}.</p>`;
+  }
+  const maxHoras = isRH ? "" : `max="${CFG.teto_diario_horas}"`;
   openModal("Novo lançamento de horas extras",`
     <form id="f-lanc" class="space-y-4">
-      ${isRH?`<div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">Servidor</label>
-        <select name="servidor_id" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Selecione…</option>
-          ${servidores.map(s=>`<option value="${s.id}">${esc(s.nome)} · ${esc(s.matricula)}</option>`).join("")}
-        </select>
-        <p class="text-xs text-slate-400 mt-1">Como RH, não há limite de horas nem bloqueio de dia, e o lançamento já entra aprovado.</p></div>`:""}
+      ${isRH?(servFixoRH
+        ? `<div class="text-sm bg-slate-50 rounded-lg p-3">Servidor: <b>${esc(servNome)}</b></div>`
+        : `<div><label class="block text-xs font-medium text-slate-600 mb-1">Servidor</label>
+            <select name="servidor_id" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              <option value="">Selecione…</option>
+              ${servidores.map(s=>`<option value="${s.id}">${esc(s.nome)} · ${esc(s.matricula)}</option>`).join("")}
+            </select></div>`)
+      :""}
+      ${isRH?`<p class="text-xs text-slate-400">Como RH, não há limite de horas nem bloqueio de dia, e o lançamento já entra aprovado.</p>`:""}
       <div class="grid grid-cols-2 gap-3">
         <div><label class="block text-xs font-medium text-slate-600 mb-1">Data</label>
-          <input name="data" type="date" required value="${hoje()}" max="${hoje()}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+          <input name="data" type="date" required value="${hoje()}" ${minAttr} ${maxAttr} class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
         <div><label class="block text-xs font-medium text-slate-600 mb-1">Horas ${isRH?"":`(máx. ${hh(CFG.teto_diario_horas)}/dia)`}</label>
-          <input name="horas" type="number" step="0.5" min="0.5" ${maxAttr} required placeholder="ex: 2" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+          <input name="horas" type="number" step="0.5" min="0.5" ${maxHoras} required placeholder="ex: 2" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
       </div>
+      ${hint}
       <div>
         <label class="block text-xs font-medium text-slate-600 mb-1">Justificativa <span class="text-rose-500">*</span> (mín. ${MIN_JUST} caracteres)</label>
         <textarea name="justificativa" rows="3" required minlength="${MIN_JUST}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Descreva o motivo da hora extra neste dia"></textarea>
@@ -360,7 +381,7 @@ async function novoLancamento(ctx){
     ev.preventDefault();
     if(just.value.trim().length<MIN_JUST){ toast(`Justificativa precisa de ao menos ${MIN_JUST} caracteres.`,"err"); return; }
     const payload={
-      servidor_id: isRH ? f.servidor_id.value : ctx.servidorFixo,
+      servidor_id: isRH ? (servFixoRH || f.servidor_id.value) : ctx.servidorFixo,
       data:f.data.value, horas:Number(f.horas.value),
       justificativa:just.value.trim(), registrado_por:SESSION.user.id
     };
@@ -372,6 +393,8 @@ async function novoLancamento(ctx){
 }
 function traduzDB(m){
   if(/he_just_min/i.test(m)) return `A justificativa precisa de ao menos ${MIN_JUST} caracteres.`;
+  if(/futura/i.test(m)) return "Não é possível lançar horas em data futura.";
+  if(/competencia/i.test(m)) return m;
   if(/bloqueado/i.test(m)) return m;
   if(/Teto diario/i.test(m)) return m.replace("diario","diário");
   if(/duplicate key/i.test(m)) return "Registro duplicado.";
@@ -478,7 +501,7 @@ async function viewMeus(){
 async function viewAprovacoes(){
   const rows=await getRegistros({status:"pendente"});
   $("#content").innerHTML=`
-    <div class="mb-5"><h2 class="text-lg font-semibold">Conferência da equipe</h2><p class="text-sm text-slate-500">Confira, ajuste, aprove ou negue as horas dos servidores da sua chefia.</p></div>
+    <div class="mb-5"><h2 class="text-lg font-semibold">Conferência da equipe</h2><p class="text-sm text-slate-500">Confira, ajuste, aprove ou negue as horas dos servidores do seu setor.</p></div>
     ${tabela(rows,{retorno:false,acoes:r=>`
       <button onclick='decidirRapido(${JSON.stringify(r)},true)' class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-md mr-1">Aprovar</button>
       <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
@@ -489,25 +512,26 @@ async function viewEquipe(){
   const horas={}; rows.filter(r=>r.status==="aprovado").forEach(r=>horas[r.servidor_id]=(horas[r.servidor_id]||0)+Number(r.horas));
   const pend={}; rows.filter(r=>r.status==="pendente").forEach(r=>pend[r.servidor_id]=(pend[r.servidor_id]||0)+1);
   $("#content").innerHTML=`
-    <div class="mb-5"><h2 class="text-lg font-semibold">Equipe — ${compLabel(thisMonth())}</h2><p class="text-sm text-slate-500">Servidores da sua chefia e horas aprovadas no mês.</p></div>
+    <div class="mb-5"><h2 class="text-lg font-semibold">Equipe — ${compLabel(thisMonth())}</h2><p class="text-sm text-slate-500">Servidores do seu setor e horas aprovadas no mês.</p></div>
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
       ${servs.map(s=>`<div class="bg-white border border-slate-200 rounded-xl p-4">
         <div class="font-medium">${esc(s.nome)}</div>
-        <div class="text-xs text-slate-400 mb-2">${esc(s.cargo||"—")} · ${esc(s.matricula)}</div>
+        <div class="text-xs text-slate-400 mb-2">${esc(s.matricula)}</div>
         <div class="text-sm">Aprovadas no mês: <b>${hh(horas[s.id]||0)}</b></div>
         ${pend[s.id]?`<div class="text-xs text-amber-600 mt-1">${pend[s.id]} pendente(s)</div>`:""}
-      </div>`).join("")||`<div class="text-slate-400 text-sm">Nenhum servidor na sua chefia.</div>`}
+      </div>`).join("")||`<div class="text-slate-400 text-sm">Nenhum servidor no seu setor.</div>`}
     </div>`;
 }
 
-// ====================== VIEW: RH ======================
+// ====================== VIEW: RH — PAINEL ======================
 async function viewPainel(){
   const comp=thisMonth();
   const [rows,servs,bloq]=await Promise.all([getRegistros({comp}),getServidores(),getBloqueados(comp)]);
   const pend=rows.filter(r=>r.status==="pendente");
   const horasAprov=rows.filter(r=>r.status==="aprovado").reduce((a,r)=>a+Number(r.horas),0);
   $("#content").innerHTML=`
-    <div class="mb-5"><h2 class="text-lg font-semibold">Painel — ${compLabel(comp)}</h2></div>
+    <div class="mb-5"><h2 class="text-lg font-semibold">Painel — ${compLabel(comp)}</h2>
+      ${CFG.mes_aberto?`<p class="text-xs text-emerald-600 mt-1">Lançamentos liberados para ${compLabel(CFG.mes_aberto)}.</p>`:`<p class="text-xs text-slate-400 mt-1">Lançamentos liberados para todos os meses.</p>`}</div>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
       ${stat("Horas aprovadas",hh(horasAprov),"emerald")}
       ${stat("Pendentes",pend.length,"amber")}
@@ -521,6 +545,8 @@ async function viewPainel(){
       <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
       <button onclick='decidirRapido(${JSON.stringify(r)},false)' class="text-xs bg-rose-600 text-white px-2.5 py-1 rounded-md">Negar</button>`})}`;
 }
+
+// ====================== VIEW: RH — LANÇAMENTOS ======================
 async function viewLancamentos(){
   const comp=window.__comp||thisMonth(), status=window.__status||"";
   const rows=await getRegistros({comp,status:status||undefined});
@@ -536,7 +562,6 @@ async function viewLancamentos(){
           <option value="aprovado"${status==="aprovado"?" selected":""}>Aprovado</option>
           <option value="rejeitado"${status==="rejeitado"?" selected":""}>Negado</option>
         </select>
-        <button onclick="exportarLancamentos()" class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">CSV</button>
         <button onclick="novoLancamento({rh:true})" class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Novo</button>
       </div>
     </div>
@@ -544,73 +569,76 @@ async function viewLancamentos(){
     ${tabela(rows,{retorno:true,acoes:r=>`
       <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
       <button onclick='excluir(${JSON.stringify(r)})' class="text-xs text-rose-600 hover:underline">excluir</button>`})}`;
-  window.__rows=rows;
   $("#fl-comp").onchange=e=>{window.__comp=e.target.value;go("lancamentos");};
   $("#fl-status").onchange=e=>{window.__status=e.target.value;go("lancamentos");};
 }
-function baixarCSV(nome,linhas){
-  const csv=linhas.map(l=>l.map(c=>`"${String(c==null?"":c).replace(/"/g,'""')}"`).join(";")).join("\n");
-  const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=nome;a.click();
-}
-function exportarLancamentos(){
-  const rows=window.__rows||[];
-  if(!rows.length){toast("Nada para exportar.","info");return;}
-  baixarCSV(`lancamentos_${window.__comp||thisMonth()}.csv`,
-    [["Data","Servidor","Matricula","Chefia","Horas","Justificativa","Situacao"],
-     ...rows.map(r=>[r.data,r.servidor_nome,r.matricula,r.chefia_nome||"",r.horas,r.justificativa,r.status])]);
-}
 
+// ====================== VIEW: RH — SERVIDORES (+ ACESSOS) ======================
 async function viewServidores(){
-  const [servs,chefias]=await Promise.all([getServidores(),getChefias()]);
-  window.__servidores=servs; window.__chefias=chefias;
-  const chefNome={}; chefias.forEach(c=>chefNome[c.id]=c.nome);
+  const [servs,chefias,perfis]=await Promise.all([getServidores(),getChefias(),getPerfis()]);
+  window.__servidores=servs; window.__chefias=chefias; window.__perfis=perfis;
+  const chefBy={}; chefias.forEach(c=>chefBy[c.id]=c);
+  const perfilByServ={}; perfis.forEach(p=>{ if(p.servidor_id) perfilByServ[p.servidor_id]=p; });
+  const semVinc=perfis.filter(p=>!p.servidor_id);
+  const setorTxt=s=>{ const c=chefBy[s.chefia_id]; return c?(c.sigla||c.nome):"—"; };
   $("#content").innerHTML=`
-    <div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h2 class="text-lg font-semibold">Servidores</h2>
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3"><div><h2 class="text-lg font-semibold">Servidores</h2>
+      <p class="text-sm text-slate-500">Lista de todos os servidores e seus acessos. Lance horas, edite dados, defina o papel ou exclua.</p></div>
       <button onclick='editarServidor(null)' class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Novo servidor</button></div>
     <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
       <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
         <th class="px-3 py-2 font-medium">Nome</th><th class="px-3 py-2 font-medium">Matrícula</th>
-        <th class="px-3 py-2 font-medium">Cargo</th><th class="px-3 py-2 font-medium">Chefia</th>
+        <th class="px-3 py-2 font-medium">Setor</th><th class="px-3 py-2 font-medium">Acesso</th>
         <th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
       <tbody>${servs.map(s=>`<tr class="border-b border-slate-100 hover:bg-slate-50">
         <td class="px-3 py-2 text-sm font-medium">${esc(s.nome)}</td>
         <td class="px-3 py-2 text-sm">${esc(s.matricula)}</td>
-        <td class="px-3 py-2 text-sm">${esc(s.cargo||"—")}</td>
-        <td class="px-3 py-2 text-sm">${esc(chefNome[s.chefia_id]||"—")}</td>
+        <td class="px-3 py-2 text-sm">${esc(setorTxt(s))}</td>
+        <td class="px-3 py-2 text-sm">${perfilByServ[s.id]?PAPEL_LABEL[perfilByServ[s.id].papel]:'<span class="text-slate-400">sem login</span>'}</td>
         <td class="px-3 py-2 text-right whitespace-nowrap">
+          <button onclick='novoLancamento({rh:true,servidorFixo:"${s.id}"})' class="text-xs text-emerald-600 hover:underline mr-2">+ horas</button>
           <button onclick='editarServidor("${s.id}")' class="text-xs text-indigo-600 hover:underline mr-2">editar</button>
           <button onclick='excluirServidor("${s.id}")' class="text-xs text-rose-600 hover:underline">excluir</button>
         </td>
-      </tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 py-8 text-sm">Nenhum servidor ainda. Eles aparecem aqui ao se cadastrarem.</td></tr>`}</tbody></table></div>
-    <p class="text-xs text-slate-400 mt-2">Servidores aparecem automaticamente quando se cadastram, vinculados à chefia que escolheram.</p>`;
+      </tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 py-8 text-sm">Nenhum servidor ainda.</td></tr>`}</tbody></table></div>
+    ${semVinc.length?`<div class="mt-6"><h3 class="text-sm font-semibold mb-2">Outros acessos (logins sem servidor)</h3>
+      <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
+        <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
+          <th class="px-3 py-2 font-medium">Usuário</th><th class="px-3 py-2 font-medium">Papel</th><th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
+        <tbody>${semVinc.map(p=>`<tr class="border-b border-slate-100">
+          <td class="px-3 py-2 text-sm"><div class="font-medium">${esc(p.nome||"—")}</div><div class="text-xs text-slate-400">${esc(p.email||"")}</div></td>
+          <td class="px-3 py-2 text-sm">${PAPEL_LABEL[p.papel]}</td>
+          <td class="px-3 py-2 text-right"><button onclick='editarAcesso(${JSON.stringify(p)})' class="text-xs text-indigo-600 hover:underline">gerenciar</button></td>
+        </tr>`).join("")}</tbody></table></div></div>`:""}`;
 }
 function editarServidor(id){
   const s = id ? (window.__servidores||[]).find(x=>x.id===id) : null;
   const chefias=window.__chefias||[];
+  const perfil = s ? (window.__perfis||[]).find(p=>p.servidor_id===s.id) : null;
   openModal(s?"Editar servidor":"Novo servidor",`
     <form id="f-serv" class="space-y-3">
       <div><label class="block text-xs font-medium text-slate-600 mb-1">Nome</label>
         <input name="nome" required value="${s?esc(s.nome):""}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
-      <div class="grid grid-cols-2 gap-3">
-        <div><label class="block text-xs font-medium text-slate-600 mb-1">Matrícula</label>
-          <input name="matricula" required value="${s?esc(s.matricula):""}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-medium text-slate-600 mb-1">Cargo</label>
-          <input name="cargo" value="${s?esc(s.cargo||""):""}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
-      </div>
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Chefia (unidade)</label>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Matrícula</label>
+        <input name="matricula" required value="${s?esc(s.matricula):""}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Setor (chefia)</label>
         <select name="chefia_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">— sem chefia —</option>
-          ${chefias.map(c=>`<option value="${c.id}"${s&&s.chefia_id===c.id?" selected":""}>${esc(c.nome)}</option>`).join("")}
+          <option value="">— sem setor —</option>
+          ${chefias.map(c=>`<option value="${c.id}"${s&&s.chefia_id===c.id?" selected":""}>${esc(c.nome)}${c.sigla?" ("+esc(c.sigla)+")":""}</option>`).join("")}
         </select></div>
+      ${perfil?`<div><label class="block text-xs font-medium text-slate-600 mb-1">Acesso (papel deste login)</label>
+        <select name="papel" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          ${Object.entries(PAPEL_LABEL).map(([k,v])=>`<option value="${k}"${perfil.papel===k?" selected":""}>${v}</option>`).join("")}
+        </select><p class="text-xs text-slate-400 mt-1">${esc(perfil.email||"")}</p></div>`:""}
       <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
         <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
     </form>`);
   $("#f-serv").onsubmit=async ev=>{
     ev.preventDefault();const f=ev.target;
-    const payload={nome:f.nome.value.trim(),matricula:f.matricula.value.trim(),cargo:f.cargo.value.trim()||null,chefia_id:f.chefia_id.value||null};
+    const payload={nome:f.nome.value.trim(),matricula:f.matricula.value.trim(),chefia_id:f.chefia_id.value||null};
     const resp=s?await sb.from("he_servidores").update(payload).eq("id",s.id):await sb.from("he_servidores").insert(payload);
     if(resp.error){toast(/duplicate/i.test(resp.error.message)?"Matrícula já cadastrada.":resp.error.message,"err");return;}
+    if(perfil && f.papel){ await sb.from("he_perfis").update({papel:f.papel.value}).eq("user_id",perfil.user_id); }
     closeModal();toast("Servidor salvo.");go(CURRENT_TAB);
   };
 }
@@ -622,8 +650,29 @@ async function excluirServidor(id){
   if(error){toast(error.message,"err");return;}
   toast("Servidor excluído.");go(CURRENT_TAB);
 }
+function editarAcesso(p){
+  const servs=window.__servidores||[];
+  openModal("Gerenciar acesso",`
+    <div class="text-sm mb-3"><b>${esc(p.nome||p.email)}</b> <span class="text-slate-400">${esc(p.email||"")}</span></div>
+    <form id="f-ac" class="space-y-3">
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Papel</label>
+        <select name="papel" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          ${Object.entries(PAPEL_LABEL).map(([k,v])=>`<option value="${k}"${p.papel===k?" selected":""}>${v}</option>`).join("")}</select></div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Vincular a um servidor</label>
+        <select name="servidor_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">—</option>
+          ${servs.map(s=>`<option value="${s.id}"${p.servidor_id===s.id?" selected":""}>${esc(s.nome)} · ${esc(s.matricula)}</option>`).join("")}</select></div>
+      <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
+        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
+    </form>`);
+  $("#f-ac").onsubmit=async ev=>{
+    ev.preventDefault();const f=ev.target;
+    const {error}=await sb.from("he_perfis").update({papel:f.papel.value,servidor_id:f.servidor_id.value||null}).eq("user_id",p.user_id);
+    if(error){toast(error.message,"err");return;}
+    closeModal();toast("Acesso atualizado.");go("servidores");
+  };
+}
 
-// ====================== VIEW: CHEFIAS (UNIDADES) ======================
+// ====================== VIEW: CHEFIAS ======================
 async function viewChefias(){
   const [chefias,servs]=await Promise.all([getChefias(),getServidores()]);
   window.__chefias=chefias; window.__servidores=servs;
@@ -631,36 +680,41 @@ async function viewChefias(){
   const cont={}; servs.forEach(s=>{ if(s.chefia_id) cont[s.chefia_id]=(cont[s.chefia_id]||0)+1; });
   $("#content").innerHTML=`
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div><h2 class="text-lg font-semibold">Chefias</h2><p class="text-sm text-slate-500">Unidades às quais os servidores se vinculam (ex: Chefia de Gabinete). Cada uma tem um responsável que aprova as horas.</p></div>
+      <div><h2 class="text-lg font-semibold">Chefias / Setores</h2><p class="text-sm text-slate-500">Unidades às quais os servidores se vinculam (ex: Chefia de Gabinete). Cada uma tem um responsável que aprova as horas.</p></div>
       <button onclick='editarChefia(null)' class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Nova chefia</button>
     </div>
     <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
       <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
-        <th class="px-3 py-2 font-medium">Chefia (unidade)</th><th class="px-3 py-2 font-medium">Responsável (aprova)</th>
+        <th class="px-3 py-2 font-medium">Chefia (unidade)</th><th class="px-3 py-2 font-medium">Sigla</th><th class="px-3 py-2 font-medium">Responsável (aprova)</th>
         <th class="px-3 py-2 font-medium text-center">Servidores</th><th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
       <tbody>${chefias.map(c=>`<tr class="border-b border-slate-100 hover:bg-slate-50">
         <td class="px-3 py-2 text-sm font-medium">${esc(c.nome)}</td>
+        <td class="px-3 py-2 text-sm">${esc(c.sigla||"—")}</td>
         <td class="px-3 py-2 text-sm">${esc(nomeServ[c.responsavel_servidor_id]||"— não definido —")}</td>
         <td class="px-3 py-2 text-sm text-center">${cont[c.id]||0}</td>
         <td class="px-3 py-2 text-right whitespace-nowrap">
           <button onclick='editarChefia("${c.id}")' class="text-xs text-indigo-600 hover:underline mr-2">editar</button>
           <button onclick='excluirChefia("${c.id}")' class="text-xs text-rose-600 hover:underline">excluir</button>
         </td>
-      </tr>`).join("")||`<tr><td colspan="4" class="text-center text-slate-400 py-8 text-sm">Nenhuma chefia. Cadastre as unidades (ex: Chefia de Gabinete) — assim os servidores poderão escolher no cadastro.</td></tr>`}</tbody></table></div>`;
+      </tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 py-8 text-sm">Nenhuma chefia. Cadastre as unidades (ex: Chefia de Gabinete).</td></tr>`}</tbody></table></div>`;
 }
 function editarChefia(id){
   const c = id ? (window.__chefias||[]).find(x=>x.id===id) : null;
   const servs = window.__servidores||[];
   openModal(c?"Editar chefia":"Nova chefia",`
     <form id="f-ch" class="space-y-3">
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Nome da chefia (unidade)</label>
-        <input name="nome" required value="${c?esc(c.nome):""}" placeholder="Ex: Chefia de Gabinete" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+      <div class="grid grid-cols-3 gap-3">
+        <div class="col-span-2"><label class="block text-xs font-medium text-slate-600 mb-1">Nome da chefia (unidade)</label>
+          <input name="nome" required value="${c?esc(c.nome):""}" placeholder="Ex: Chefia de Gabinete" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">Sigla</label>
+          <input name="sigla" value="${c?esc(c.sigla||""):""}" placeholder="Ex: GAB" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+      </div>
       <div><label class="block text-xs font-medium text-slate-600 mb-1">Responsável (quem confere/aprova)</label>
         <select name="responsavel" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
           <option value="">— definir depois —</option>
           ${servs.map(s=>`<option value="${s.id}"${c&&c.responsavel_servidor_id===s.id?" selected":""}>${esc(s.nome)} · ${esc(s.matricula)}</option>`).join("")}
         </select>
-        <p class="text-xs text-slate-400 mt-1">O responsável ganha acesso de chefia para aprovar as horas desta unidade.</p></div>
+        <p class="text-xs text-slate-400 mt-1">Pode ser qualquer servidor da lista. Ele ganha acesso de chefia para aprovar as horas desta unidade.</p></div>
       <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
         <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
     </form>`);
@@ -668,7 +722,7 @@ function editarChefia(id){
     ev.preventDefault();const f=ev.target;
     const novoResp=f.responsavel.value||null;
     const antigoResp=c?c.responsavel_servidor_id:null;
-    const payload={nome:f.nome.value.trim(), responsavel_servidor_id:novoResp};
+    const payload={nome:f.nome.value.trim(), sigla:f.sigla.value.trim()||null, responsavel_servidor_id:novoResp};
     const resp=c?await sb.from("he_chefias").update(payload).eq("id",c.id):await sb.from("he_chefias").insert(payload);
     if(resp.error){toast(resp.error.message,"err");return;}
     await sincronizarResponsavel(antigoResp, novoResp);
@@ -684,88 +738,63 @@ async function sincronizarResponsavel(antigo, novo){
 }
 async function excluirChefia(id){
   const c=(window.__chefias||[]).find(x=>x.id===id);
-  if(!confirm(`Excluir a chefia "${c?c.nome:""}"? Os servidores vinculados ficarão sem chefia.`))return;
+  if(!confirm(`Excluir a chefia "${c?c.nome:""}"? Os servidores vinculados ficarão sem setor.`))return;
   const {error}=await sb.from("he_chefias").delete().eq("id",id);
   if(error){toast(error.message,"err");return;}
   if(c&&c.responsavel_servidor_id){ await sincronizarResponsavel(c.responsavel_servidor_id, null); }
   toast("Chefia excluída.");go("chefias");
 }
 
-// ====================== VIEW: ACESSOS ======================
-async function viewAcessos(){
-  const [{data:perfis},servs]=await Promise.all([sb.from("he_perfis").select("*").order("papel"),getServidores()]);
-  window.__servs=servs;
-  $("#content").innerHTML=`
-    <div class="mb-4"><h2 class="text-lg font-semibold">Acessos e perfis</h2><p class="text-sm text-slate-500">Defina o papel de cada usuário e o servidor vinculado. (Para tornar alguém chefia, defina-o como responsável de uma unidade na aba Chefias.)</p></div>
-    <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
-      <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
-        <th class="px-3 py-2 font-medium">Usuário</th><th class="px-3 py-2 font-medium">Matrícula</th><th class="px-3 py-2 font-medium">Papel</th>
-        <th class="px-3 py-2 font-medium">Servidor</th><th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
-      <tbody>${(perfis||[]).map(p=>`<tr class="border-b border-slate-100">
-        <td class="px-3 py-2 text-sm"><div class="font-medium">${esc(p.nome||"—")}</div><div class="text-xs text-slate-400">${esc(p.email||"")}</div></td>
-        <td class="px-3 py-2 text-sm">${esc(p.matricula||"—")}</td>
-        <td class="px-3 py-2 text-sm">${PAPEL_LABEL[p.papel]}</td>
-        <td class="px-3 py-2 text-sm">${esc(servs.find(s=>s.id===p.servidor_id)?.nome||"—")}</td>
-        <td class="px-3 py-2 text-right"><button onclick='editarAcesso(${JSON.stringify(p)})' class="text-xs text-indigo-600 hover:underline">gerenciar</button></td>
-      </tr>`).join("")}</tbody></table></div>`;
-}
-function editarAcesso(p){
-  const servs=window.__servs||[];
-  openModal("Gerenciar acesso",`
-    <div class="text-sm mb-3"><b>${esc(p.nome||p.email)}</b> <span class="text-slate-400">${esc(p.email||"")}</span></div>
-    <form id="f-ac" class="space-y-3">
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Papel</label>
-        <select name="papel" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          ${Object.entries(PAPEL_LABEL).map(([k,v])=>`<option value="${k}"${p.papel===k?" selected":""}>${v}</option>`).join("")}</select></div>
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Servidor vinculado</label>
-        <select name="servidor_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">—</option>
-          ${servs.map(s=>`<option value="${s.id}"${p.servidor_id===s.id?" selected":""}>${esc(s.nome)} · ${esc(s.matricula)}</option>`).join("")}</select></div>
-      <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
-        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
-    </form>`);
-  $("#f-ac").onsubmit=async ev=>{
-    ev.preventDefault();const f=ev.target;
-    const payload={papel:f.papel.value,servidor_id:f.servidor_id.value||null};
-    const {error}=await sb.from("he_perfis").update(payload).eq("user_id",p.user_id);
-    if(error){toast(error.message,"err");return;}
-    closeModal();toast("Acesso atualizado.");go("acessos");
-  };
-}
-
-// ====================== VIEW: DIAS BLOQUEADOS ======================
-async function viewDias(){
+// ====================== VIEW: AJUSTES (parâmetros + dias) ======================
+async function viewAjustes(){
+  const {data:c}=await sb.from("he_config").select("*").eq("id",1).maybeSingle();
   const comp=window.__compBloq||thisMonth();
   const bloq=await getBloqueados(comp);
   const set=new Map(bloq.map(b=>[b.data,b.motivo]));
   const [y,m]=comp.split("-").map(Number);
-  const primeiro=new Date(y,m-1,1), nDias=new Date(y,m,0).getDate(), offset=primeiro.getDay();
+  const nDias=new Date(y,m,0).getDate(), offset=new Date(y,m-1,1).getDay();
   const sem=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
   let cells="";
   for(let i=0;i<offset;i++) cells+=`<div></div>`;
   for(let d=1;d<=nDias;d++){
-    const ds=`${comp}-${String(d).padStart(2,"0")}`;
-    const b=set.has(ds);
+    const ds=`${comp}-${String(d).padStart(2,"0")}`; const b=set.has(ds);
     cells+=`<button onclick="toggleDia('${ds}',${b})" title="${b?esc(set.get(ds)||'Bloqueado'):'Liberado'}"
       class="aspect-square rounded-lg text-sm flex items-center justify-center border ${b?'bg-rose-100 border-rose-300 text-rose-700 font-semibold':'bg-white border-slate-200 hover:border-indigo-300'}">${d}</button>`;
   }
   $("#content").innerHTML=`
-    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div><h2 class="text-lg font-semibold">Dias bloqueados</h2><p class="text-sm text-slate-500">Clique em um dia para bloquear/liberar. Em dias bloqueados, servidores não conseguem lançar horas.</p></div>
-      <input id="cb-comp" type="month" value="${comp}" class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
-    </div>
-    <div class="bg-white border border-slate-200 rounded-xl p-4 max-w-xl">
-      <div class="grid grid-cols-7 gap-1 mb-1 text-center text-xs text-slate-400">${sem.map(s=>`<div>${s}</div>`).join("")}</div>
-      <div class="grid grid-cols-7 gap-1">${cells}</div>
-      <div class="flex gap-4 mt-3 text-xs text-slate-500">
-        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-rose-100 border border-rose-300 inline-block"></span> bloqueado</span>
-        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-white border border-slate-200 inline-block"></span> liberado</span>
+    <div class="mb-4"><h2 class="text-lg font-semibold">Ajustes</h2><p class="text-sm text-slate-500">Limite diário, mês liberado para lançamento e dias bloqueados.</p></div>
+    <div class="grid lg:grid-cols-2 gap-5">
+      <form id="f-cfg" class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 h-fit">
+        <h3 class="font-semibold text-sm">Parâmetros</h3>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">Teto diário (horas)</label>
+          <input name="teto_diario_horas" type="number" step="0.5" min="0" value="${c.teto_diario_horas}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">Mês liberado para lançamento</label>
+          <input name="mes_aberto" type="month" value="${c.mes_aberto||''}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <p class="text-xs text-slate-400 mt-1">Os servidores só conseguem lançar nesse mês. Deixe vazio para liberar todos os meses. (Datas futuras nunca são permitidas.)</p></div>
+        <button class="bg-indigo-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg">Salvar parâmetros</button>
+      </form>
+      <div class="bg-white border border-slate-200 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-sm">Dias bloqueados</h3>
+          <input id="cb-comp" type="month" value="${comp}" class="rounded-lg border border-slate-300 px-2 py-1 text-sm">
+        </div>
+        <p class="text-xs text-slate-500 mb-2">Clique num dia para bloquear/liberar. Em dias bloqueados, servidores não lançam horas.</p>
+        <div class="grid grid-cols-7 gap-1 mb-1 text-center text-xs text-slate-400">${sem.map(s=>`<div>${s}</div>`).join("")}</div>
+        <div class="grid grid-cols-7 gap-1">${cells}</div>
+        <div class="flex gap-4 mt-3 text-xs text-slate-500">
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-rose-100 border border-rose-300 inline-block"></span> bloqueado</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-white border border-slate-200 inline-block"></span> liberado</span>
+        </div>
       </div>
-    </div>
-    ${bloq.length?`<div class="mt-4 max-w-xl"><h3 class="text-sm font-semibold mb-2">Bloqueios em ${compLabel(comp)}</h3>
-      <div class="space-y-1">${bloq.map(b=>`<div class="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
-        <span>${fmtData(b.data)} ${b.motivo?`<span class="text-slate-400">· ${esc(b.motivo)}</span>`:""}</span>
-        <button onclick="toggleDia('${b.data}',true)" class="text-xs text-rose-600 hover:underline">liberar</button></div>`).join("")}</div></div>`:""}`;
-  $("#cb-comp").onchange=e=>{window.__compBloq=e.target.value;go("dias");};
+    </div>`;
+  $("#cb-comp").onchange=e=>{window.__compBloq=e.target.value;go("ajustes");};
+  $("#f-cfg").onsubmit=async ev=>{
+    ev.preventDefault();const f=ev.target;
+    const {error}=await sb.from("he_config").update({teto_diario_horas:Number(f.teto_diario_horas.value),mes_aberto:f.mes_aberto.value||null,atualizado_em:new Date().toISOString()}).eq("id",1);
+    if(error){toast(error.message,"err");return;}
+    CFG.teto_diario_horas=Number(f.teto_diario_horas.value); CFG.mes_aberto=f.mes_aberto.value||null;
+    toast("Ajustes salvos.");
+  };
 }
 async function toggleDia(ds,bloqueado){
   if(bloqueado){
@@ -778,10 +807,10 @@ async function toggleDia(ds,bloqueado){
     if(error){toast(error.message,"err");return;}
     toast("Dia bloqueado.");
   }
-  go("dias");
+  go("ajustes");
 }
 
-// ====================== VIEW: RELATÓRIO ======================
+// ====================== VIEW: RELATÓRIO (PDF / EXCEL) ======================
 async function viewRelatorio(){
   const comp=window.__compRel||thisMonth();
   const base=window.__baseRel||"aprovado";
@@ -790,7 +819,7 @@ async function viewRelatorio(){
   const map={};
   filtrados.forEach(r=>{
     const k=r.servidor_id;
-    if(!map[k]) map[k]={nome:r.servidor_nome,matricula:r.matricula,chefia:r.chefia_nome||"—",horas:0,justs:new Set()};
+    if(!map[k]) map[k]={matricula:r.matricula,nome:r.servidor_nome,sigla:r.chefia_sigla||r.chefia_nome||"—",horas:0,justs:new Set()};
     map[k].horas+=Number(r.horas);
     const j=(r.justificativa||"").trim();
     if(j) map[k].justs.add(j);
@@ -799,57 +828,72 @@ async function viewRelatorio(){
   window.__rel=lista;
   $("#content").innerHTML=`
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div><h2 class="text-lg font-semibold">Relatório geral — ${compLabel(comp)}</h2><p class="text-sm text-slate-500">Horas por servidor; justificativas repetidas são suprimidas.</p></div>
+      <div><h2 class="text-lg font-semibold">Relatório — ${compLabel(comp)}</h2><p class="text-sm text-slate-500">Horas por servidor; justificativas repetidas são suprimidas.</p></div>
       <div class="flex gap-2 items-center flex-wrap">
         <input id="rl-comp" type="month" value="${comp}" class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
         <select id="rl-base" class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
           <option value="aprovado"${base==="aprovado"?" selected":""}>Somente aprovadas</option>
           <option value="todas"${base==="todas"?" selected":""}>Aprovadas + pendentes</option>
         </select>
-        <button onclick="exportarRelatorio()" class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-50">CSV</button>
+        <button onclick="exportarExcel()" class="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5">Excel</button>
+        <button onclick="exportarPDF()" class="text-sm bg-rose-600 text-white rounded-lg px-3 py-1.5">PDF</button>
       </div>
     </div>
     <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
       <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
-        <th class="px-3 py-2 font-medium">Servidor</th><th class="px-3 py-2 font-medium">Matrícula</th>
-        <th class="px-3 py-2 font-medium">Chefia</th><th class="px-3 py-2 font-medium text-center">Horas no mês</th>
+        <th class="px-3 py-2 font-medium">Matrícula</th><th class="px-3 py-2 font-medium">Nome</th>
+        <th class="px-3 py-2 font-medium">Setor</th><th class="px-3 py-2 font-medium text-center">Horas no mês</th>
         <th class="px-3 py-2 font-medium">Justificativas (distintas)</th></tr></thead>
       <tbody>${lista.map(x=>`<tr class="border-b border-slate-100 align-top">
-        <td class="px-3 py-2 text-sm font-medium">${esc(x.nome)}</td>
         <td class="px-3 py-2 text-sm">${esc(x.matricula)}</td>
-        <td class="px-3 py-2 text-sm">${esc(x.chefia)}</td>
+        <td class="px-3 py-2 text-sm font-medium">${esc(x.nome)}</td>
+        <td class="px-3 py-2 text-sm">${esc(x.sigla)}</td>
         <td class="px-3 py-2 text-sm text-center font-semibold">${hh(x.horas)}</td>
         <td class="px-3 py-2 text-sm"><ul class="list-disc pl-4 space-y-0.5">${[...x.justs].map(j=>`<li>${esc(j)}</li>`).join("")}</ul></td>
       </tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 py-8 text-sm">Sem dados no período.</td></tr>`}</tbody></table></div>`;
   $("#rl-comp").onchange=e=>{window.__compRel=e.target.value;go("relatorio");};
   $("#rl-base").onchange=e=>{window.__baseRel=e.target.value;go("relatorio");};
 }
-function exportarRelatorio(){
+function exportarExcel(){
   const lista=window.__rel||[];
   if(!lista.length){toast("Nada para exportar.","info");return;}
-  baixarCSV(`relatorio_${window.__compRel||thisMonth()}.csv`,
-    [["Servidor","Matricula","Chefia","HorasNoMes","Justificativas"],
-     ...lista.map(x=>[x.nome,x.matricula,x.chefia,x.horas,[...x.justs].join(" | ")])]);
+  if(!window.XLSX){toast("Biblioteca Excel ainda carregando. Tente de novo em instantes.","err");return;}
+  const aoa=[["Matrícula","Nome","Setor","Horas no mês","Justificativa"],
+    ...lista.map(x=>[x.matricula,x.nome,x.sigla,Number(x.horas),[...x.justs].join("; ")])];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"]=[{wch:12},{wch:26},{wch:10},{wch:14},{wch:60}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Horas Extras");
+  XLSX.writeFile(wb, `horas_extras_${window.__compRel||thisMonth()}.xlsx`);
 }
-
-// ====================== VIEW: PARÂMETROS ======================
-async function viewParametros(){
-  const {data:c}=await sb.from("he_config").select("*").eq("id",1).maybeSingle();
-  $("#content").innerHTML=`
-    <div class="mb-4"><h2 class="text-lg font-semibold">Parâmetros</h2><p class="text-sm text-slate-500">Limite diário de horas extras aplicado a servidores e chefias (o RH não tem limite).</p></div>
-    <form id="f-cfg" class="bg-white border border-slate-200 rounded-xl p-5 max-w-sm space-y-4">
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Teto diário (horas)</label>
-        <input name="teto_diario_horas" type="number" step="0.5" min="0" value="${c.teto_diario_horas}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
-      <button class="bg-indigo-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg">Salvar</button>
-      <p class="text-xs text-slate-400">O controle mensal é feito pela aba <b>Dias bloqueados</b>: marque os dias em que não pode haver hora extra.</p>
-    </form>`;
-  $("#f-cfg").onsubmit=async ev=>{
-    ev.preventDefault();const f=ev.target;
-    const {error}=await sb.from("he_config").update({teto_diario_horas:Number(f.teto_diario_horas.value),atualizado_em:new Date().toISOString()}).eq("id",1);
-    if(error){toast(error.message,"err");return;}
-    CFG.teto_diario_horas=Number(f.teto_diario_horas.value);
-    toast("Parâmetros atualizados.");
-  };
+function exportarPDF(){
+  const lista=window.__rel||[];
+  if(!lista.length){toast("Nada para exportar.","info");return;}
+  if(!window.jspdf){toast("Biblioteca PDF ainda carregando. Tente de novo em instantes.","err");return;}
+  const comp=window.__compRel||thisMonth();
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({unit:"pt",format:"a4"});
+  const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight();
+  doc.setFont("helvetica","bold"); doc.setFontSize(15);
+  doc.text("SDU SUL", W/2, 44, {align:"center"});
+  doc.setFontSize(12);
+  doc.text(`Horas Extras Referente ${mesAno(comp)}`, W/2, 64, {align:"center"});
+  doc.autoTable({
+    startY:86,
+    head:[["Matrícula","Nome","Setor","Horas no mês","Justificativa"]],
+    body:lista.map(x=>[x.matricula, x.nome, x.sigla, hh(x.horas), [...x.justs].join("; ")]),
+    styles:{fontSize:8,cellPadding:3,overflow:"linebreak"},
+    headStyles:{fillColor:[79,70,229],textColor:255},
+    columnStyles:{0:{cellWidth:60},2:{cellWidth:55},3:{cellWidth:60,halign:"center"},4:{cellWidth:200}},
+    margin:{left:40,right:40}
+  });
+  let yy=(doc.lastAutoTable?doc.lastAutoTable.finalY:120)+40;
+  if(yy>H-110){ doc.addPage(); yy=80; }
+  doc.setFont("helvetica","normal"); doc.setFontSize(10);
+  doc.text(`Relatório gerado em ${new Date().toLocaleDateString("pt-BR")}`, 40, yy);
+  yy+=80;
+  doc.text("__________________________________________", W/2, yy, {align:"center"});
+  doc.text("Prefeito", W/2, yy+16, {align:"center"});
+  doc.save(`horas_extras_${comp}.pdf`);
 }
 </script>
 </body>
