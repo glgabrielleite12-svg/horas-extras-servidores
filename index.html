@@ -54,7 +54,7 @@
           <label class="block text-xs font-medium text-slate-600 mb-1">Matrícula <span class="text-rose-500">*</span></label>
           <input name="matricula" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Sua matrícula funcional">
         </div>
-        <div id="signup-chefia-wrap" class="hidden">
+        <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Chefia <span class="text-rose-500">*</span></label>
           <select name="chefia_id" id="signup-chefia" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"></select>
         </div>
@@ -67,7 +67,7 @@
           <input name="password" type="password" required minlength="6" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="mínimo 6 caracteres">
         </div>
         <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition">Criar conta</button>
-        <p class="text-xs text-slate-400">A matrícula vincula seu acesso ao cadastro de servidor. O 1º cadastro do sistema vira RH.</p>
+        <p class="text-xs text-slate-400">Escolha a sua chefia (unidade). O 1º cadastro do sistema vira RH.</p>
       </form>
 
       <p id="auth-msg" class="mt-4 text-sm hidden rounded-lg px-3 py-2"></p>
@@ -163,6 +163,7 @@ function swapAuth(login){
   $("#tab-login").className=`flex-1 py-2 rounded-md ${login?"bg-white shadow-sm":"text-slate-500"}`;
   $("#tab-signup").className=`flex-1 py-2 rounded-md ${!login?"bg-white shadow-sm":"text-slate-500"}`;
   authMsg("");
+  if(!login) carregarChefiasSignup();
 }
 function authMsg(msg,err){
   const p=$("#auth-msg");
@@ -195,14 +196,17 @@ function traduz(m){
 $("#btn-logout").onclick=()=>sb.auth.signOut();
 
 async function carregarChefiasSignup(){
+  const sel=$("#signup-chefia");
+  if(!sel) return;
   try{
     const { data, error } = await sb.rpc("he_chefias_publicas");
-    const wrap=$("#signup-chefia-wrap"), sel=$("#signup-chefia");
-    if(!wrap||!sel) return;
-    if(error || !data || !data.length){ wrap.classList.add("hidden"); sel.required=false; return; }
+    if(error || !data || !data.length){
+      sel.innerHTML='<option value="">— nenhuma chefia cadastrada ainda —</option>';
+      sel.required=false; return;
+    }
     sel.innerHTML='<option value="">— selecione sua chefia —</option>'+data.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join("");
-    sel.required=true; wrap.classList.remove("hidden");
-  }catch(_){}
+    sel.required=true;
+  }catch(_){ sel.innerHTML='<option value="">—</option>'; sel.required=false; }
 }
 carregarChefiasSignup();
 
@@ -210,9 +214,9 @@ carregarChefiasSignup();
 sb.auth.onAuthStateChange((_e,s)=>{SESSION=s;boot();});
 sb.auth.getSession().then(({data})=>{SESSION=data.session;boot();});
 async function boot(){
-  if(!SESSION){ $("#auth-screen").classList.remove("hidden"); $("#app-screen").classList.add("hidden"); PERFIL=null; return; }
+  if(!SESSION){ $("#auth-screen").classList.remove("hidden"); $("#app-screen").classList.add("hidden"); PERFIL=null; carregarChefiasSignup(); return; }
   const {data:perfil}=await sb.from("he_perfis").select("*").eq("user_id",SESSION.user.id).maybeSingle();
-  PERFIL=perfil||{papel:"servidor",nome:SESSION.user.email,email:SESSION.user.email,servidor_id:null,secretaria_id:null,matricula:null};
+  PERFIL=perfil||{papel:"servidor",nome:SESSION.user.email,email:SESSION.user.email,servidor_id:null,matricula:null};
   const {data:cfg}=await sb.from("he_config").select("*").eq("id",1).maybeSingle();
   if(cfg) CFG=cfg;
   $("#auth-screen").classList.add("hidden"); $("#app-screen").classList.remove("hidden");
@@ -226,7 +230,7 @@ function renderHeader(){
   $("#hdr-avatar").textContent=(n||"?").trim().charAt(0).toUpperCase();
 }
 function tabsFor(p){
-  if(p==="rh") return [["painel","Painel"],["lancamentos","Lançamentos"],["servidores","Servidores"],["chefias","Chefias"],["secretarias","Setores"],["acessos","Acessos"],["dias","Dias bloqueados"],["relatorio","Relatório"],["parametros","Parâmetros"]];
+  if(p==="rh") return [["painel","Painel"],["lancamentos","Lançamentos"],["servidores","Servidores"],["chefias","Chefias"],["acessos","Acessos"],["dias","Dias bloqueados"],["relatorio","Relatório"],["parametros","Parâmetros"]];
   if(p==="chefia") return [["aprovacoes","Conferência"],["equipe","Equipe"],["meus","Meus lançamentos"]];
   return [["meus","Meus lançamentos"]];
 }
@@ -242,7 +246,7 @@ function go(tab){
     const on=b.dataset.tab===tab;
     b.className=`navbtn whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 ${on?"border-indigo-600 text-indigo-700":"border-transparent text-slate-500 hover:text-indigo-600"}`;
   });
-  const fn={meus:viewMeus,aprovacoes:viewAprovacoes,equipe:viewEquipe,painel:viewPainel,lancamentos:viewLancamentos,servidores:viewServidores,chefias:viewChefias,secretarias:viewSecretarias,acessos:viewAcessos,dias:viewDias,relatorio:viewRelatorio,parametros:viewParametros}[tab];
+  const fn={meus:viewMeus,aprovacoes:viewAprovacoes,equipe:viewEquipe,painel:viewPainel,lancamentos:viewLancamentos,servidores:viewServidores,chefias:viewChefias,acessos:viewAcessos,dias:viewDias,relatorio:viewRelatorio,parametros:viewParametros}[tab];
   $("#content").innerHTML=`<div class="text-slate-400 text-sm py-10 text-center">Carregando…</div>`;
   fn&&fn();
 }
@@ -258,11 +262,15 @@ async function getRegistros(f={}){
   return data||[];
 }
 async function getServidores(){
-  const {data,error}=await sb.from("he_servidores").select("*, he_secretarias(nome,sigla)").order("nome");
+  const {data,error}=await sb.from("he_servidores").select("*").order("nome");
   if(error){toast(error.message,"err");return[];}
   return data||[];
 }
-async function getSecretarias(){ const {data}=await sb.from("he_secretarias").select("*").order("nome"); return data||[]; }
+async function getChefias(){
+  const {data,error}=await sb.from("he_chefias").select("*").order("nome");
+  if(error){toast(error.message,"err");return[];}
+  return data||[];
+}
 async function getBloqueados(comp){
   const {ini,fim}=monthRange(comp);
   const {data}=await sb.from("he_dias_bloqueados").select("*").gte("data",ini).lt("data",fim).order("data");
@@ -293,7 +301,7 @@ function tabela(rows,{servidor=true,retorno=false,acoes=null,justificativa=true}
     </tr></thead><tbody>
     ${rows.map(r=>`<tr class="border-b border-slate-100 hover:bg-slate-50 align-top">
       <td class="px-3 py-2 text-sm whitespace-nowrap">${fmtData(r.data)}</td>
-      ${servidor?`<td class="px-3 py-2 text-sm"><div class="font-medium">${esc(r.servidor_nome)}</div><div class="text-xs text-slate-400">${esc(r.matricula||"")}</div></td>`:""}
+      ${servidor?`<td class="px-3 py-2 text-sm"><div class="font-medium">${esc(r.servidor_nome)}</div><div class="text-xs text-slate-400">${esc(r.matricula||"")}${r.chefia_nome?" · "+esc(r.chefia_nome):""}</div></td>`:""}
       <td class="px-3 py-2 text-sm text-center whitespace-nowrap">${hh(r.horas)}</td>
       ${justificativa?`<td class="px-3 py-2 text-sm max-w-xs"><div class="line-clamp-2">${esc(r.justificativa)}</div></td>`:""}
       <td class="px-3 py-2 text-center">${statusBadge(r.status)}</td>
@@ -305,7 +313,6 @@ function tabela(rows,{servidor=true,retorno=false,acoes=null,justificativa=true}
 
 // ====================== NOVO LANÇAMENTO ======================
 async function novoLancamento(ctx){
-  // ctx: {servidorFixo} para servidor/chefia  |  {rh:true} para RH
   const isRH = ctx && ctx.rh;
   let servidores=[];
   if(isRH) servidores=await getServidores();
@@ -339,7 +346,6 @@ async function novoLancamento(ctx){
   const f=$("#f-lanc");
   const just=f.justificativa, cnt=$("#just-count");
   just.oninput=()=>{cnt.textContent=just.value.trim().length;};
-  // checa dia bloqueado para servidor/chefia
   let bloqSet=new Set();
   if(!isRH){
     const refresh=async()=>{ const b=await getBloqueados(f.data.value.slice(0,7)); bloqSet=new Set(b.map(x=>x.data)); validar(); };
@@ -372,7 +378,6 @@ function traduzDB(m){
   return m;
 }
 
-// editar próprio lançamento (servidor, enquanto pendente)
 function editarMeu(r){
   openModal("Editar lançamento",`
     <form id="f-ed" class="space-y-4">
@@ -402,7 +407,7 @@ async function excluir(r){
   toast("Excluído.");go(CURRENT_TAB);
 }
 
-// ====================== DECISÃO / AJUSTE (chefia e RH) ======================
+// ====================== DECISÃO / AJUSTE ======================
 function gerenciar(r){
   openModal("Conferir lançamento",`
     <div class="text-sm space-y-1 mb-4 bg-slate-50 rounded-lg p-3">
@@ -473,7 +478,7 @@ async function viewMeus(){
 async function viewAprovacoes(){
   const rows=await getRegistros({status:"pendente"});
   $("#content").innerHTML=`
-    <div class="mb-5"><h2 class="text-lg font-semibold">Conferência da equipe</h2><p class="text-sm text-slate-500">Confira, ajuste, aprove ou negue as horas dos servidores vinculados.</p></div>
+    <div class="mb-5"><h2 class="text-lg font-semibold">Conferência da equipe</h2><p class="text-sm text-slate-500">Confira, ajuste, aprove ou negue as horas dos servidores da sua chefia.</p></div>
     ${tabela(rows,{retorno:false,acoes:r=>`
       <button onclick='decidirRapido(${JSON.stringify(r)},true)' class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-md mr-1">Aprovar</button>
       <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
@@ -484,14 +489,14 @@ async function viewEquipe(){
   const horas={}; rows.filter(r=>r.status==="aprovado").forEach(r=>horas[r.servidor_id]=(horas[r.servidor_id]||0)+Number(r.horas));
   const pend={}; rows.filter(r=>r.status==="pendente").forEach(r=>pend[r.servidor_id]=(pend[r.servidor_id]||0)+1);
   $("#content").innerHTML=`
-    <div class="mb-5"><h2 class="text-lg font-semibold">Equipe — ${compLabel(thisMonth())}</h2><p class="text-sm text-slate-500">Servidores vinculados e horas aprovadas no mês.</p></div>
+    <div class="mb-5"><h2 class="text-lg font-semibold">Equipe — ${compLabel(thisMonth())}</h2><p class="text-sm text-slate-500">Servidores da sua chefia e horas aprovadas no mês.</p></div>
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
       ${servs.map(s=>`<div class="bg-white border border-slate-200 rounded-xl p-4">
         <div class="font-medium">${esc(s.nome)}</div>
         <div class="text-xs text-slate-400 mb-2">${esc(s.cargo||"—")} · ${esc(s.matricula)}</div>
         <div class="text-sm">Aprovadas no mês: <b>${hh(horas[s.id]||0)}</b></div>
         ${pend[s.id]?`<div class="text-xs text-amber-600 mt-1">${pend[s.id]} pendente(s)</div>`:""}
-      </div>`).join("")||`<div class="text-slate-400 text-sm">Nenhum servidor vinculado.</div>`}
+      </div>`).join("")||`<div class="text-slate-400 text-sm">Nenhum servidor na sua chefia.</div>`}
     </div>`;
 }
 
@@ -552,42 +557,37 @@ function exportarLancamentos(){
   const rows=window.__rows||[];
   if(!rows.length){toast("Nada para exportar.","info");return;}
   baixarCSV(`lancamentos_${window.__comp||thisMonth()}.csv`,
-    [["Data","Servidor","Matricula","Setor","Horas","Justificativa","Situacao"],
-     ...rows.map(r=>[r.data,r.servidor_nome,r.matricula,r.secretaria_nome||"",r.horas,r.justificativa,r.status])]);
+    [["Data","Servidor","Matricula","Chefia","Horas","Justificativa","Situacao"],
+     ...rows.map(r=>[r.data,r.servidor_nome,r.matricula,r.chefia_nome||"",r.horas,r.justificativa,r.status])]);
 }
 
 async function viewServidores(){
-  const [servs,secs]=await Promise.all([getServidores(),getSecretarias()]);
-  window.__secs=secs; window.__servidores=servs;
-  const nomeById={}; servs.forEach(s=>nomeById[s.id]=s.nome);
+  const [servs,chefias]=await Promise.all([getServidores(),getChefias()]);
+  window.__servidores=servs; window.__chefias=chefias;
+  const chefNome={}; chefias.forEach(c=>chefNome[c.id]=c.nome);
   $("#content").innerHTML=`
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h2 class="text-lg font-semibold">Servidores</h2>
       <button onclick='editarServidor(null)' class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Novo servidor</button></div>
     <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
       <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
         <th class="px-3 py-2 font-medium">Nome</th><th class="px-3 py-2 font-medium">Matrícula</th>
-        <th class="px-3 py-2 font-medium">Cargo</th><th class="px-3 py-2 font-medium">Setor</th>
-        <th class="px-3 py-2 font-medium">Chefia</th><th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
-      <tbody>${servs.map(s=>`<tr class="border-b border-slate-100 hover:bg-slate-50 align-top">
-        <td class="px-3 py-2 text-sm font-medium">${esc(s.nome)} ${s.eh_chefia?`<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-700 align-middle">chefia</span>`:""}</td>
+        <th class="px-3 py-2 font-medium">Cargo</th><th class="px-3 py-2 font-medium">Chefia</th>
+        <th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
+      <tbody>${servs.map(s=>`<tr class="border-b border-slate-100 hover:bg-slate-50">
+        <td class="px-3 py-2 text-sm font-medium">${esc(s.nome)}</td>
         <td class="px-3 py-2 text-sm">${esc(s.matricula)}</td>
         <td class="px-3 py-2 text-sm">${esc(s.cargo||"—")}</td>
-        <td class="px-3 py-2 text-sm">${esc(s.he_secretarias?.sigla||s.he_secretarias?.nome||"—")}</td>
-        <td class="px-3 py-2 text-sm">${esc(nomeById[s.chefia_id]||"—")}</td>
+        <td class="px-3 py-2 text-sm">${esc(chefNome[s.chefia_id]||"—")}</td>
         <td class="px-3 py-2 text-right whitespace-nowrap">
           <button onclick='editarServidor("${s.id}")' class="text-xs text-indigo-600 hover:underline mr-2">editar</button>
-          ${s.eh_chefia
-            ? `<button onclick='removerChefia("${s.id}")' class="text-xs text-amber-600 hover:underline mr-2">remover chefia</button>`
-            : `<button onclick='tornarChefia("${s.id}")' class="text-xs text-emerald-600 hover:underline mr-2">tornar chefia</button>`}
           <button onclick='excluirServidor("${s.id}")' class="text-xs text-rose-600 hover:underline">excluir</button>
         </td>
-      </tr>`).join("")||`<tr><td colspan="6" class="text-center text-slate-400 py-8 text-sm">Nenhum servidor ainda. Eles aparecem aqui ao se cadastrarem.</td></tr>`}</tbody></table></div>
-    <p class="text-xs text-slate-400 mt-2">Servidores aparecem automaticamente quando se cadastram. Use "tornar chefia" para promover.</p>`;
+      </tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 py-8 text-sm">Nenhum servidor ainda. Eles aparecem aqui ao se cadastrarem.</td></tr>`}</tbody></table></div>
+    <p class="text-xs text-slate-400 mt-2">Servidores aparecem automaticamente quando se cadastram, vinculados à chefia que escolheram.</p>`;
 }
 function editarServidor(id){
   const s = id ? (window.__servidores||[]).find(x=>x.id===id) : null;
-  const secs=window.__secs||[];
-  const chefias=(window.__servidores||[]).filter(x=>x.eh_chefia && (!s || x.id!==s.id));
+  const chefias=window.__chefias||[];
   openModal(s?"Editar servidor":"Novo servidor",`
     <form id="f-serv" class="space-y-3">
       <div><label class="block text-xs font-medium text-slate-600 mb-1">Nome</label>
@@ -598,94 +598,21 @@ function editarServidor(id){
         <div><label class="block text-xs font-medium text-slate-600 mb-1">Cargo</label>
           <input name="cargo" value="${s?esc(s.cargo||""):""}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
       </div>
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Setor / Secretaria</label>
-        <select name="secretaria_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">—</option>
-          ${secs.map(x=>`<option value="${x.id}"${s&&s.secretaria_id===x.id?" selected":""}>${esc(x.nome)}</option>`).join("")}
-        </select></div>
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Chefia vinculada</label>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Chefia (unidade)</label>
         <select name="chefia_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
           <option value="">— sem chefia —</option>
-          ${chefias.map(c=>`<option value="${c.id}"${s&&s.chefia_id===c.id?" selected":""}>${esc(c.nome)} · ${esc(c.matricula)}</option>`).join("")}
+          ${chefias.map(c=>`<option value="${c.id}"${s&&s.chefia_id===c.id?" selected":""}>${esc(c.nome)}</option>`).join("")}
         </select></div>
       <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
         <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
     </form>`);
   $("#f-serv").onsubmit=async ev=>{
     ev.preventDefault();const f=ev.target;
-    const payload={nome:f.nome.value.trim(),matricula:f.matricula.value.trim(),cargo:f.cargo.value.trim()||null,secretaria_id:f.secretaria_id.value||null,chefia_id:f.chefia_id.value||null};
+    const payload={nome:f.nome.value.trim(),matricula:f.matricula.value.trim(),cargo:f.cargo.value.trim()||null,chefia_id:f.chefia_id.value||null};
     const resp=s?await sb.from("he_servidores").update(payload).eq("id",s.id):await sb.from("he_servidores").insert(payload);
     if(resp.error){toast(/duplicate/i.test(resp.error.message)?"Matrícula já cadastrada.":resp.error.message,"err");return;}
     closeModal();toast("Servidor salvo.");go(CURRENT_TAB);
   };
-}
-
-async function viewChefias(){
-  const servs=await getServidores();
-  window.__servidores=servs;
-  const chefias=servs.filter(s=>s.eh_chefia);
-  window.__naoChefias=servs.filter(s=>!s.eh_chefia);
-  const vinc={}; servs.forEach(s=>{ if(s.chefia_id) vinc[s.chefia_id]=(vinc[s.chefia_id]||0)+1; });
-  $("#content").innerHTML=`
-    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div><h2 class="text-lg font-semibold">Chefias</h2><p class="text-sm text-slate-500">Quem confere e aprova as horas dos servidores vinculados.</p></div>
-      <button onclick='novaChefia()' class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Definir chefia</button>
-    </div>
-    <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
-      <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
-        <th class="px-3 py-2 font-medium">Chefia</th><th class="px-3 py-2 font-medium">Matrícula</th>
-        <th class="px-3 py-2 font-medium text-center">Servidores vinculados</th><th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
-      <tbody>${chefias.map(c=>`<tr class="border-b border-slate-100 hover:bg-slate-50">
-        <td class="px-3 py-2 text-sm font-medium">${esc(c.nome)}</td>
-        <td class="px-3 py-2 text-sm">${esc(c.matricula)}</td>
-        <td class="px-3 py-2 text-sm text-center">${vinc[c.id]||0}</td>
-        <td class="px-3 py-2 text-right"><button onclick='removerChefia("${c.id}")' class="text-xs text-rose-600 hover:underline">remover</button></td>
-      </tr>`).join("")||`<tr><td colspan="4" class="text-center text-slate-400 py-8 text-sm">Nenhuma chefia definida. Use “+ Definir chefia”.</td></tr>`}</tbody></table></div>`;
-}
-function novaChefia(){
-  const naoChefias=window.__naoChefias||[];
-  openModal("Definir chefia",`
-    <form id="f-ch" class="space-y-3">
-      <p class="text-sm text-slate-500">Promova um servidor já cadastrado ou cadastre uma nova chefia.</p>
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Servidor existente</label>
-        <select id="ch-existente" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">— cadastrar nova chefia —</option>
-          ${naoChefias.map(s=>`<option value="${s.id}">${esc(s.nome)} · ${esc(s.matricula)}</option>`).join("")}
-        </select></div>
-      <div id="ch-nova" class="grid grid-cols-2 gap-3">
-        <div><label class="block text-xs font-medium text-slate-600 mb-1">Nome</label>
-          <input name="nome" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-medium text-slate-600 mb-1">Matrícula</label>
-          <input name="matricula" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
-      </div>
-      <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
-        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
-    </form>`);
-  const selEx=$("#ch-existente"), novaWrap=$("#ch-nova");
-  selEx.onchange=()=>{ novaWrap.style.display = selEx.value ? "none" : "grid"; };
-  $("#f-ch").onsubmit=async ev=>{
-    ev.preventDefault();const f=ev.target;
-    if(selEx.value){ await tornarChefia(selEx.value); return; }
-    const nome=f.nome.value.trim(), matricula=f.matricula.value.trim();
-    if(!nome||!matricula){toast("Informe nome e matrícula.","err");return;}
-    const {error}=await sb.from("he_servidores").insert({nome,matricula,eh_chefia:true});
-    if(error){toast(/duplicate/i.test(error.message)?"Matrícula já cadastrada.":error.message,"err");return;}
-    closeModal();toast("Chefia cadastrada.");go("chefias");
-  };
-}
-async function tornarChefia(id){
-  const {error}=await sb.from("he_servidores").update({eh_chefia:true}).eq("id",id);
-  if(error){toast(error.message,"err");return;}
-  await sb.from("he_perfis").update({papel:"chefia"}).eq("servidor_id",id);
-  closeModal();toast("Agora é chefia.");go(CURRENT_TAB);
-}
-async function removerChefia(id){
-  if(!confirm("Remover esta pessoa do papel de chefia?"))return;
-  await sb.from("he_servidores").update({chefia_id:null}).eq("chefia_id",id);
-  const {error}=await sb.from("he_servidores").update({eh_chefia:false}).eq("id",id);
-  if(error){toast(error.message,"err");return;}
-  await sb.from("he_perfis").update({papel:"servidor"}).eq("servidor_id",id);
-  closeModal();toast("Chefia removida.");go(CURRENT_TAB);
 }
 async function excluirServidor(id){
   const s=(window.__servidores||[]).find(x=>x.id===id);
@@ -696,56 +623,94 @@ async function excluirServidor(id){
   toast("Servidor excluído.");go(CURRENT_TAB);
 }
 
-async function viewSecretarias(){
-  const secs=await getSecretarias();
+// ====================== VIEW: CHEFIAS (UNIDADES) ======================
+async function viewChefias(){
+  const [chefias,servs]=await Promise.all([getChefias(),getServidores()]);
+  window.__chefias=chefias; window.__servidores=servs;
+  const nomeServ={}; servs.forEach(s=>nomeServ[s.id]=s.nome);
+  const cont={}; servs.forEach(s=>{ if(s.chefia_id) cont[s.chefia_id]=(cont[s.chefia_id]||0)+1; });
   $("#content").innerHTML=`
-    <div class="flex items-center justify-between mb-4"><h2 class="text-lg font-semibold">Setores / Secretarias</h2>
-      <button onclick='editarSecretaria(null)' class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Novo</button></div>
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      ${secs.map(x=>`<div class="bg-white border border-slate-200 rounded-xl p-4 flex justify-between items-start">
-        <div><div class="font-medium">${esc(x.nome)}</div><div class="text-xs text-slate-400">${esc(x.sigla||"")}</div></div>
-        <button onclick='editarSecretaria(${JSON.stringify(x)})' class="text-xs text-indigo-600 hover:underline">editar</button></div>`).join("")||`<div class="text-slate-400 text-sm">Nenhum setor cadastrado.</div>`}
-    </div>`;
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div><h2 class="text-lg font-semibold">Chefias</h2><p class="text-sm text-slate-500">Unidades às quais os servidores se vinculam (ex: Chefia de Gabinete). Cada uma tem um responsável que aprova as horas.</p></div>
+      <button onclick='editarChefia(null)' class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Nova chefia</button>
+    </div>
+    <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
+      <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
+        <th class="px-3 py-2 font-medium">Chefia (unidade)</th><th class="px-3 py-2 font-medium">Responsável (aprova)</th>
+        <th class="px-3 py-2 font-medium text-center">Servidores</th><th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
+      <tbody>${chefias.map(c=>`<tr class="border-b border-slate-100 hover:bg-slate-50">
+        <td class="px-3 py-2 text-sm font-medium">${esc(c.nome)}</td>
+        <td class="px-3 py-2 text-sm">${esc(nomeServ[c.responsavel_servidor_id]||"— não definido —")}</td>
+        <td class="px-3 py-2 text-sm text-center">${cont[c.id]||0}</td>
+        <td class="px-3 py-2 text-right whitespace-nowrap">
+          <button onclick='editarChefia("${c.id}")' class="text-xs text-indigo-600 hover:underline mr-2">editar</button>
+          <button onclick='excluirChefia("${c.id}")' class="text-xs text-rose-600 hover:underline">excluir</button>
+        </td>
+      </tr>`).join("")||`<tr><td colspan="4" class="text-center text-slate-400 py-8 text-sm">Nenhuma chefia. Cadastre as unidades (ex: Chefia de Gabinete) — assim os servidores poderão escolher no cadastro.</td></tr>`}</tbody></table></div>`;
 }
-function editarSecretaria(x){
-  openModal(x?"Editar setor":"Novo setor",`
-    <form id="f-sec" class="space-y-3">
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Nome</label>
-        <input name="nome" required value="${x?esc(x.nome):""}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Sigla</label>
-        <input name="sigla" value="${x?esc(x.sigla||""):""}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+function editarChefia(id){
+  const c = id ? (window.__chefias||[]).find(x=>x.id===id) : null;
+  const servs = window.__servidores||[];
+  openModal(c?"Editar chefia":"Nova chefia",`
+    <form id="f-ch" class="space-y-3">
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Nome da chefia (unidade)</label>
+        <input name="nome" required value="${c?esc(c.nome):""}" placeholder="Ex: Chefia de Gabinete" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Responsável (quem confere/aprova)</label>
+        <select name="responsavel" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <option value="">— definir depois —</option>
+          ${servs.map(s=>`<option value="${s.id}"${c&&c.responsavel_servidor_id===s.id?" selected":""}>${esc(s.nome)} · ${esc(s.matricula)}</option>`).join("")}
+        </select>
+        <p class="text-xs text-slate-400 mt-1">O responsável ganha acesso de chefia para aprovar as horas desta unidade.</p></div>
       <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
         <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
     </form>`);
-  $("#f-sec").onsubmit=async ev=>{
+  $("#f-ch").onsubmit=async ev=>{
     ev.preventDefault();const f=ev.target;
-    const payload={nome:f.nome.value.trim(),sigla:f.sigla.value.trim()||null};
-    const resp=x?await sb.from("he_secretarias").update(payload).eq("id",x.id):await sb.from("he_secretarias").insert(payload);
+    const novoResp=f.responsavel.value||null;
+    const antigoResp=c?c.responsavel_servidor_id:null;
+    const payload={nome:f.nome.value.trim(), responsavel_servidor_id:novoResp};
+    const resp=c?await sb.from("he_chefias").update(payload).eq("id",c.id):await sb.from("he_chefias").insert(payload);
     if(resp.error){toast(resp.error.message,"err");return;}
-    closeModal();toast("Setor salvo.");go("secretarias");
+    await sincronizarResponsavel(antigoResp, novoResp);
+    closeModal();toast("Chefia salva.");go("chefias");
   };
 }
+async function sincronizarResponsavel(antigo, novo){
+  if(novo){ await sb.from("he_perfis").update({papel:"chefia"}).eq("servidor_id",novo); }
+  if(antigo && antigo!==novo){
+    const {count}=await sb.from("he_chefias").select("id",{count:"exact",head:true}).eq("responsavel_servidor_id",antigo);
+    if(!count){ await sb.from("he_perfis").update({papel:"servidor"}).eq("servidor_id",antigo); }
+  }
+}
+async function excluirChefia(id){
+  const c=(window.__chefias||[]).find(x=>x.id===id);
+  if(!confirm(`Excluir a chefia "${c?c.nome:""}"? Os servidores vinculados ficarão sem chefia.`))return;
+  const {error}=await sb.from("he_chefias").delete().eq("id",id);
+  if(error){toast(error.message,"err");return;}
+  if(c&&c.responsavel_servidor_id){ await sincronizarResponsavel(c.responsavel_servidor_id, null); }
+  toast("Chefia excluída.");go("chefias");
+}
 
+// ====================== VIEW: ACESSOS ======================
 async function viewAcessos(){
-  const [{data:perfis},servs,secs]=await Promise.all([sb.from("he_perfis").select("*").order("papel"),getServidores(),getSecretarias()]);
-  window.__servs=servs;window.__secs=secs;
+  const [{data:perfis},servs]=await Promise.all([sb.from("he_perfis").select("*").order("papel"),getServidores()]);
+  window.__servs=servs;
   $("#content").innerHTML=`
-    <div class="mb-4"><h2 class="text-lg font-semibold">Acessos e perfis</h2><p class="text-sm text-slate-500">Defina o papel e vincule cada usuário a um servidor / setor.</p></div>
+    <div class="mb-4"><h2 class="text-lg font-semibold">Acessos e perfis</h2><p class="text-sm text-slate-500">Defina o papel de cada usuário e o servidor vinculado. (Para tornar alguém chefia, defina-o como responsável de uma unidade na aba Chefias.)</p></div>
     <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
       <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
         <th class="px-3 py-2 font-medium">Usuário</th><th class="px-3 py-2 font-medium">Matrícula</th><th class="px-3 py-2 font-medium">Papel</th>
-        <th class="px-3 py-2 font-medium">Servidor</th><th class="px-3 py-2 font-medium">Setor (chefia)</th><th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
+        <th class="px-3 py-2 font-medium">Servidor</th><th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
       <tbody>${(perfis||[]).map(p=>`<tr class="border-b border-slate-100">
         <td class="px-3 py-2 text-sm"><div class="font-medium">${esc(p.nome||"—")}</div><div class="text-xs text-slate-400">${esc(p.email||"")}</div></td>
         <td class="px-3 py-2 text-sm">${esc(p.matricula||"—")}</td>
         <td class="px-3 py-2 text-sm">${PAPEL_LABEL[p.papel]}</td>
         <td class="px-3 py-2 text-sm">${esc(servs.find(s=>s.id===p.servidor_id)?.nome||"—")}</td>
-        <td class="px-3 py-2 text-sm">${esc(secs.find(s=>s.id===p.secretaria_id)?.sigla||"—")}</td>
         <td class="px-3 py-2 text-right"><button onclick='editarAcesso(${JSON.stringify(p)})' class="text-xs text-indigo-600 hover:underline">gerenciar</button></td>
       </tr>`).join("")}</tbody></table></div>`;
 }
 function editarAcesso(p){
-  const servs=window.__servs||[],secs=window.__secs||[];
+  const servs=window.__servs||[];
   openModal("Gerenciar acesso",`
     <div class="text-sm mb-3"><b>${esc(p.nome||p.email)}</b> <span class="text-slate-400">${esc(p.email||"")}</span></div>
     <form id="f-ac" class="space-y-3">
@@ -755,18 +720,14 @@ function editarAcesso(p){
       <div><label class="block text-xs font-medium text-slate-600 mb-1">Servidor vinculado</label>
         <select name="servidor_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">—</option>
           ${servs.map(s=>`<option value="${s.id}"${p.servidor_id===s.id?" selected":""}>${esc(s.nome)} · ${esc(s.matricula)}</option>`).join("")}</select></div>
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Setor que chefia (apenas chefia)</label>
-        <select name="secretaria_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">—</option>
-          ${secs.map(s=>`<option value="${s.id}"${p.secretaria_id===s.id?" selected":""}>${esc(s.nome)}</option>`).join("")}</select></div>
       <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
         <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
     </form>`);
   $("#f-ac").onsubmit=async ev=>{
     ev.preventDefault();const f=ev.target;
-    const payload={papel:f.papel.value,servidor_id:f.servidor_id.value||null,secretaria_id:f.secretaria_id.value||null};
+    const payload={papel:f.papel.value,servidor_id:f.servidor_id.value||null};
     const {error}=await sb.from("he_perfis").update(payload).eq("user_id",p.user_id);
     if(error){toast(error.message,"err");return;}
-    if(payload.servidor_id){ await sb.from("he_servidores").update({eh_chefia: payload.papel==='chefia'}).eq("id",payload.servidor_id); }
     closeModal();toast("Acesso atualizado.");go("acessos");
   };
 }
@@ -826,11 +787,10 @@ async function viewRelatorio(){
   const base=window.__baseRel||"aprovado";
   const rows=await getRegistros({comp});
   const filtrados=rows.filter(r=> base==="aprovado" ? r.status==="aprovado" : r.status!=="rejeitado");
-  // agrupa por servidor
   const map={};
   filtrados.forEach(r=>{
     const k=r.servidor_id;
-    if(!map[k]) map[k]={nome:r.servidor_nome,matricula:r.matricula,setor:r.secretaria_nome||"—",horas:0,justs:new Set()};
+    if(!map[k]) map[k]={nome:r.servidor_nome,matricula:r.matricula,chefia:r.chefia_nome||"—",horas:0,justs:new Set()};
     map[k].horas+=Number(r.horas);
     const j=(r.justificativa||"").trim();
     if(j) map[k].justs.add(j);
@@ -852,12 +812,12 @@ async function viewRelatorio(){
     <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
       <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
         <th class="px-3 py-2 font-medium">Servidor</th><th class="px-3 py-2 font-medium">Matrícula</th>
-        <th class="px-3 py-2 font-medium">Setor</th><th class="px-3 py-2 font-medium text-center">Horas no mês</th>
+        <th class="px-3 py-2 font-medium">Chefia</th><th class="px-3 py-2 font-medium text-center">Horas no mês</th>
         <th class="px-3 py-2 font-medium">Justificativas (distintas)</th></tr></thead>
       <tbody>${lista.map(x=>`<tr class="border-b border-slate-100 align-top">
         <td class="px-3 py-2 text-sm font-medium">${esc(x.nome)}</td>
         <td class="px-3 py-2 text-sm">${esc(x.matricula)}</td>
-        <td class="px-3 py-2 text-sm">${esc(x.setor)}</td>
+        <td class="px-3 py-2 text-sm">${esc(x.chefia)}</td>
         <td class="px-3 py-2 text-sm text-center font-semibold">${hh(x.horas)}</td>
         <td class="px-3 py-2 text-sm"><ul class="list-disc pl-4 space-y-0.5">${[...x.justs].map(j=>`<li>${esc(j)}</li>`).join("")}</ul></td>
       </tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 py-8 text-sm">Sem dados no período.</td></tr>`}</tbody></table></div>`;
@@ -868,8 +828,8 @@ function exportarRelatorio(){
   const lista=window.__rel||[];
   if(!lista.length){toast("Nada para exportar.","info");return;}
   baixarCSV(`relatorio_${window.__compRel||thisMonth()}.csv`,
-    [["Servidor","Matricula","Setor","HorasNoMes","Justificativas"],
-     ...lista.map(x=>[x.nome,x.matricula,x.setor,x.horas,[...x.justs].join(" | ")])]);
+    [["Servidor","Matricula","Chefia","HorasNoMes","Justificativas"],
+     ...lista.map(x=>[x.nome,x.matricula,x.chefia,x.horas,[...x.justs].join(" | ")])]);
 }
 
 // ====================== VIEW: PARÂMETROS ======================
