@@ -136,8 +136,8 @@ const hh = n => Number(n).toFixed(2).replace(/\.00$/,"").replace(".",",")+"h";
 const thisMonth = () => new Date().toISOString().slice(0,7);
 const hoje = () => new Date().toISOString().slice(0,10);
 function monthRange(comp){ const [y,m]=comp.split("-").map(Number); return {ini:`${comp}-01`, fim:new Date(y,m,1).toISOString().slice(0,10)}; }
-function compLabel(comp){ return new Date(comp+"-01").toLocaleDateString("pt-BR",{month:"long",year:"numeric"}); }
-function mesAno(comp){ const d=new Date(comp+"-01"); const m=d.toLocaleDateString("pt-BR",{month:"long"}); return m.charAt(0).toUpperCase()+m.slice(1)+"/"+comp.slice(0,4); }
+function compLabel(comp){ return new Date(comp+"-01T00:00:00").toLocaleDateString("pt-BR",{month:"long",year:"numeric"}); }
+function mesAno(comp){ const d=new Date(comp+"-01T00:00:00"); const m=d.toLocaleDateString("pt-BR",{month:"long"}); return m.charAt(0).toUpperCase()+m.slice(1)+"/"+comp.slice(0,4); }
 function ultimoDia(comp){ const [y,m]=comp.split("-").map(Number); return `${comp}-`+String(new Date(y,m,0).getDate()).padStart(2,"0"); }
 
 function toast(msg, tipo="ok"){
