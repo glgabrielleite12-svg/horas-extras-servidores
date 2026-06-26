@@ -183,13 +183,20 @@ $("#form-login").onsubmit=async e=>{
 };
 $("#form-signup").onsubmit=async e=>{
   e.preventDefault();const f=e.target;
-  const {data,error}=await sb.auth.signUp({
-    email:f.email.value.trim(), password:f.password.value,
-    options:{data:{nome:f.nome.value.trim(), matricula:f.matricula.value.trim(), chefia_id:(f.chefia_id?f.chefia_id.value:""), app:"he"}}
-  });
-  if(error) return authMsg(traduz(error.message),true);
-  if(data.session) authMsg("Conta criada! Entrando…");
-  else authMsg("Conta criada. Se a confirmação de e-mail estiver ativa, confirme pelo link e depois entre.",false);
+  const email=f.email.value.trim(), password=f.password.value;
+  authMsg("Criando conta…",false);
+  try{
+    const r=await fetch(`${SUPABASE_URL}/functions/v1/cadastro`,{
+      method:"POST",
+      headers:{ "content-type":"application/json", apikey:SUPABASE_KEY, authorization:`Bearer ${SUPABASE_KEY}` },
+      body:JSON.stringify({ nome:f.nome.value.trim(), matricula:f.matricula.value.trim(), chefia_id:(f.chefia_id?f.chefia_id.value:""), email, password })
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok || data.error){ return authMsg(data.error||"Não foi possível criar a conta.",true); }
+    authMsg("Conta criada! Entrando…",false);
+    const {error}=await sb.auth.signInWithPassword({email,password});
+    if(error) authMsg("Conta criada! Agora é só clicar em Entrar.",false);
+  }catch(_){ authMsg("Falha de conexão. Tente novamente.",true); }
 };
 function traduz(m){
   if(/Invalid login/i.test(m)) return "E-mail ou senha incorretos.";
