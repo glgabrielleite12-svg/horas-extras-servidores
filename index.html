@@ -605,6 +605,7 @@ async function viewServidores(){
         <td class="px-3 py-2 text-right whitespace-nowrap">
           <button onclick='novoLancamento({rh:true,servidorFixo:"${s.id}"})' class="text-xs text-emerald-600 hover:underline mr-2">+ horas</button>
           <button onclick='editarServidor("${s.id}")' class="text-xs text-indigo-600 hover:underline mr-2">editar</button>
+          ${perfilByServ[s.id]?`<button onclick='redefinirSenha("${perfilByServ[s.id].user_id}")' class="text-xs text-amber-600 hover:underline mr-2">senha</button>`:""}
           <button onclick='excluirServidor("${s.id}")' class="text-xs text-rose-600 hover:underline">excluir</button>
         </td>
       </tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 py-8 text-sm">Nenhum servidor ainda.</td></tr>`}</tbody></table></div>
@@ -615,7 +616,7 @@ async function viewServidores(){
         <tbody>${semVinc.map(p=>`<tr class="border-b border-slate-100">
           <td class="px-3 py-2 text-sm"><div class="font-medium">${esc(p.nome||"—")}</div><div class="text-xs text-slate-400">${esc(p.email||"")}</div></td>
           <td class="px-3 py-2 text-sm">${PAPEL_LABEL[p.papel]}</td>
-          <td class="px-3 py-2 text-right"><button onclick='editarAcesso(${JSON.stringify(p)})' class="text-xs text-indigo-600 hover:underline">gerenciar</button></td>
+          <td class="px-3 py-2 text-right"><button onclick='redefinirSenha("${p.user_id}")' class="text-xs text-amber-600 hover:underline mr-2">senha</button><button onclick='editarAcesso(${JSON.stringify(p)})' class="text-xs text-indigo-600 hover:underline">gerenciar</button></td>
         </tr>`).join("")}</tbody></table></div></div>`:""}`;
 }
 function editarServidor(id){
@@ -656,6 +657,35 @@ async function excluirServidor(id){
   const {error}=await sb.from("he_servidores").delete().eq("id",id);
   if(error){toast(error.message,"err");return;}
   toast("Servidor excluído.");go(CURRENT_TAB);
+}
+async function redefinirSenha(userId){
+  const p=(window.__perfis||[]).find(x=>x.user_id===userId);
+  const nome = p ? (p.nome||p.email) : "este usuário";
+  openModal("Redefinir senha",`
+    <p class="text-sm text-slate-500 mb-3">Defina uma nova senha para <b>${esc(nome)}</b> e informe a ele(a). Não envolve e-mail.</p>
+    <form id="f-rs" class="space-y-3">
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Nova senha (mín. 6 caracteres)</label>
+        <input name="nova" type="text" required minlength="6" placeholder="ex: Mudar@2026" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+      <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
+        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Redefinir</button></div>
+    </form>`);
+  $("#f-rs").onsubmit=async ev=>{
+    ev.preventDefault();
+    const nova=ev.target.nova.value;
+    if(nova.length<6){toast("A senha deve ter ao menos 6 caracteres.","err");return;}
+    const { data:{ session } }=await sb.auth.getSession();
+    if(!session){toast("Sessão expirada. Entre novamente.","err");return;}
+    try{
+      const r=await fetch(`${SUPABASE_URL}/functions/v1/redefinir-senha`,{
+        method:"POST",
+        headers:{ "content-type":"application/json", apikey:SUPABASE_KEY, authorization:`Bearer ${session.access_token}` },
+        body:JSON.stringify({ user_id:userId, nova_senha:nova })
+      });
+      const data=await r.json().catch(()=>({}));
+      if(!r.ok||data.error){ toast(data.error||"Não foi possível redefinir.","err"); return; }
+      closeModal(); toast("Senha redefinida! Informe a nova senha ao servidor.");
+    }catch(_){ toast("Falha de conexão.","err"); }
+  };
 }
 function editarAcesso(p){
   const servs=window.__servidores||[];
