@@ -507,27 +507,68 @@ async function viewMeus(){
 // ====================== VIEW: CHEFIA ======================
 async function viewAprovacoes(){
   const rows=await getRegistros({status:"pendente"});
-  $("#content").innerHTML=`
-    <div class="mb-5"><h2 class="text-lg font-semibold">Conferência da equipe</h2><p class="text-sm text-slate-500">Confira, ajuste, aprove ou negue as horas dos servidores do seu setor.</p></div>
-    ${tabela(rows,{retorno:false,acoes:r=>`
+  const linhas=rows.map(r=>`<tr class="border-b border-slate-100 hover:bg-slate-50 align-top">
+    <td class="px-3 py-2 text-center"><input type="checkbox" class="chk-reg w-4 h-4 align-middle" value="${r.id}"></td>
+    <td class="px-3 py-2 text-sm whitespace-nowrap">${fmtData(r.data)}</td>
+    <td class="px-3 py-2 text-sm"><div class="font-medium">${esc(r.servidor_nome)}</div><div class="text-xs text-slate-400">${esc(r.matricula||"")}</div></td>
+    <td class="px-3 py-2 text-sm text-center whitespace-nowrap">${hh(r.horas)}</td>
+    <td class="px-3 py-2 text-sm max-w-xs"><div class="line-clamp-2">${esc(r.justificativa)}</div></td>
+    <td class="px-3 py-2 text-right whitespace-nowrap">
       <button onclick='decidirRapido(${JSON.stringify(r)},true)' class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-md mr-1">Aprovar</button>
       <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
-      <button onclick='decidirRapido(${JSON.stringify(r)},false)' class="text-xs bg-rose-600 text-white px-2.5 py-1 rounded-md">Negar</button>`})}`;
+      <button onclick='decidirRapido(${JSON.stringify(r)},false)' class="text-xs bg-rose-600 text-white px-2.5 py-1 rounded-md">Negar</button>
+    </td></tr>`).join("");
+  $("#content").innerHTML=`
+    <div class="mb-4 flex items-center justify-between flex-wrap gap-3">
+      <div><h2 class="text-lg font-semibold">Conferência da equipe</h2><p class="text-sm text-slate-500">Confira, ajuste, aprove ou negue as horas do seu setor. Marque vários e use "Aprovar selecionados".</p></div>
+      <button id="btn-aprovar-sel" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">✓ Aprovar selecionados</button>
+    </div>
+    ${rows.length?`<div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
+      <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
+        <th class="px-3 py-2 font-medium text-center"><input type="checkbox" id="chk-all" class="w-4 h-4 align-middle" title="Selecionar todos"></th>
+        <th class="px-3 py-2 font-medium">Data</th><th class="px-3 py-2 font-medium">Servidor</th>
+        <th class="px-3 py-2 font-medium text-center">Horas</th><th class="px-3 py-2 font-medium">Justificativa</th>
+        <th class="px-3 py-2 font-medium text-right">Ações</th></tr></thead>
+      <tbody>${linhas}</tbody></table></div>`
+    :`<div class="text-center text-slate-400 py-10 text-sm bg-white rounded-xl border border-slate-200">Nenhum lançamento pendente. 🎉</div>`}`;
+  const chkAll=$("#chk-all");
+  if(chkAll) chkAll.onchange=()=>{ document.querySelectorAll(".chk-reg").forEach(c=>c.checked=chkAll.checked); };
+  $("#btn-aprovar-sel").onclick=aprovarSelecionados;
+}
+async function aprovarSelecionados(){
+  const ids=[...document.querySelectorAll(".chk-reg:checked")].map(c=>c.value);
+  if(!ids.length){toast("Selecione ao menos um lançamento.","info");return;}
+  if(!confirm(`Aprovar ${ids.length} lançamento(s) selecionado(s)?`))return;
+  const {error}=await sb.from("he_registros").update({status:"aprovado",aprovado_por:SESSION.user.id,aprovado_em:new Date().toISOString()}).in("id",ids);
+  if(error){toast(error.message,"err");return;}
+  toast(`${ids.length} lançamento(s) aprovado(s).`);go(CURRENT_TAB);
 }
 async function viewEquipe(){
-  const [servs,rows]=await Promise.all([getServidores(),getRegistros({comp:thisMonth()})]);
-  const horas={}; rows.filter(r=>r.status==="aprovado").forEach(r=>horas[r.servidor_id]=(horas[r.servidor_id]||0)+Number(r.horas));
-  const pend={}; rows.filter(r=>r.status==="pendente").forEach(r=>pend[r.servidor_id]=(pend[r.servidor_id]||0)+1);
+  const comp=window.__eqComp||thisMonth();
+  const nome=(window.__eqNome||"").trim();
+  const rows=await getRegistros({comp});
+  const filtrados = nome ? rows.filter(r=>(r.servidor_nome||"").toLowerCase().includes(nome.toLowerCase())) : rows;
+  const totalAprov=filtrados.filter(r=>r.status==="aprovado").reduce((a,r)=>a+Number(r.horas),0);
+  const pend=filtrados.filter(r=>r.status==="pendente").length;
   $("#content").innerHTML=`
-    <div class="mb-5"><h2 class="text-lg font-semibold">Equipe — ${compLabel(thisMonth())}</h2><p class="text-sm text-slate-500">Servidores do seu setor e horas aprovadas no mês.</p></div>
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      ${servs.map(s=>`<div class="bg-white border border-slate-200 rounded-xl p-4">
-        <div class="font-medium">${esc(s.nome)}</div>
-        <div class="text-xs text-slate-400 mb-2">${esc(s.matricula)}</div>
-        <div class="text-sm">Aprovadas no mês: <b>${hh(horas[s.id]||0)}</b></div>
-        ${pend[s.id]?`<div class="text-xs text-amber-600 mt-1">${pend[s.id]} pendente(s)</div>`:""}
-      </div>`).join("")||`<div class="text-slate-400 text-sm">Nenhum servidor no seu setor.</div>`}
-    </div>`;
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div><h2 class="text-lg font-semibold">Equipe — ${compLabel(comp)}</h2><p class="text-sm text-slate-500">Veja as horas do seu setor por mês. Escolha o mês e/ou filtre por nome.</p></div>
+      <div class="flex gap-2 items-center flex-wrap">
+        <input id="eq-comp" type="month" value="${comp}" class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+        <input id="eq-nome" type="text" value="${esc(nome)}" placeholder="Filtrar por nome (Enter)" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+      </div>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+      ${stat("Aprovadas no mês",hh(totalAprov),"emerald")}
+      ${stat("Pendentes",pend,"amber")}
+      ${stat("Lançamentos no mês",filtrados.length,"indigo")}
+    </div>
+    ${tabela(filtrados,{retorno:true})}`;
+  $("#eq-comp").onchange=e=>{window.__eqComp=e.target.value;go("equipe");};
+  const inp=$("#eq-nome");
+  inp.oninput=()=>{ window.__eqNome=inp.value; };
+  inp.onkeydown=e=>{ if(e.key==="Enter"){ window.__eqNome=inp.value; go("equipe"); } };
+  inp.onchange=()=>{ window.__eqNome=inp.value; go("equipe"); };
 }
 
 // ====================== VIEW: RH — PAINEL ======================
