@@ -119,8 +119,8 @@
 
 <script>
 // ====================== CONFIG ======================
-const SUPABASE_URL = "https://myseiqcspdnydzizfsio.supabase.co";
-const SUPABASE_KEY = "sb_publishable_iL9Bicvs653VuDD5624Xow_VgZ_UK-e";
+const SUPABASE_URL = "https://qviiojhksntsexldzoso.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2aWlvamhrc250c2V4bGR6b3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMTQ3MDEsImV4cCI6MjEwMTU5MDcwMX0.dDynEwk1hXPodqJ1Jqt_KBWQFa7A3J-1iGkYY_y16ws";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const PAPEL_LABEL = { servidor:"Servidor", chefia:"Chefia", rh:"RH / Administração" };
@@ -318,7 +318,7 @@ function tabela(rows,{servidor=true,retorno=false,acoes=null,justificativa=true}
     ${rows.map(r=>`<tr class="border-b border-slate-100 hover:bg-slate-50 align-top">
       <td class="px-3 py-2 text-sm whitespace-nowrap">${fmtData(r.data)}</td>
       ${servidor?`<td class="px-3 py-2 text-sm"><div class="font-medium">${esc(r.servidor_nome)}</div><div class="text-xs text-slate-400">${esc(r.matricula||"")}${r.chefia_sigla?" · "+esc(r.chefia_sigla):""}</div></td>`:""}
-      <td class="px-3 py-2 text-sm text-center whitespace-nowrap">${hh(r.horas)}</td>
+      <td class="px-3 py-2 text-sm text-center whitespace-nowrap">${hh(r.horas)}${r.tipo==="noturno"?'<div class="text-[10px] text-indigo-500 font-medium">Noturno</div>':""}</td>
       ${justificativa?`<td class="px-3 py-2 text-sm max-w-xs"><div class="line-clamp-2">${esc(r.justificativa)}</div></td>`:""}
       <td class="px-3 py-2 text-center">${statusBadge(r.status)}</td>
       ${retorno?`<td class="px-3 py-2">${retornoChefia(r)}</td>`:""}
@@ -330,6 +330,8 @@ function tabela(rows,{servidor=true,retorno=false,acoes=null,justificativa=true}
 // ====================== NOVO LANÇAMENTO ======================
 async function novoLancamento(ctx){
   const isRH = ctx && ctx.rh;
+  const tipo = (ctx && ctx.tipo) || "extra";
+  const isNoturno = tipo === "noturno";
   const servFixoRH = isRH && ctx.servidorFixo;
   let servidores=[], servNome="";
   if(isRH && !servFixoRH) servidores=await getServidores();
@@ -342,7 +344,7 @@ async function novoLancamento(ctx){
     hint=`<p class="text-xs text-amber-600">Lançamentos liberados apenas para ${compLabel(CFG.mes_aberto)}.</p>`;
   }
   const maxHoras = isRH ? "" : `max="${CFG.teto_diario_horas}"`;
-  openModal("Novo lançamento de horas extras",`
+  openModal(isNoturno?"Novo lançamento de adicional noturno":"Novo lançamento de horas extras",`
     <form id="f-lanc" class="space-y-4">
       ${isRH?(servFixoRH
         ? `<div class="text-sm bg-slate-50 rounded-lg p-3">Servidor: <b>${esc(servNome)}</b></div>`
@@ -356,13 +358,13 @@ async function novoLancamento(ctx){
       <div class="grid grid-cols-2 gap-3">
         <div><label class="block text-xs font-medium text-slate-600 mb-1">Data</label>
           <input name="data" type="date" required value="${hoje()}" ${minAttr} ${maxAttr} class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-medium text-slate-600 mb-1">Horas ${isRH?"":`(máx. ${hh(CFG.teto_diario_horas)}/dia)`}</label>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">${isNoturno?"Horas noturnas":"Horas"} ${isRH?"":`(máx. ${hh(CFG.teto_diario_horas)}/dia)`}</label>
           <input name="horas" type="number" step="0.5" min="0.5" ${maxHoras} required placeholder="ex: 2" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
       </div>
       ${hint}
       <div>
         <label class="block text-xs font-medium text-slate-600 mb-1">Justificativa <span class="text-rose-500">*</span> (mín. ${MIN_JUST} caracteres)</label>
-        <textarea name="justificativa" rows="3" required minlength="${MIN_JUST}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Descreva o motivo da hora extra neste dia"></textarea>
+        <textarea name="justificativa" rows="3" required minlength="${MIN_JUST}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="${isNoturno?"Descreva o motivo do adicional noturno neste dia":"Descreva o motivo da hora extra neste dia"}"></textarea>
         <div class="text-xs text-slate-400 mt-1"><span id="just-count">0</span>/${MIN_JUST}</div>
       </div>
       <div id="lanc-aviso" class="hidden text-xs rounded-lg px-3 py-2 bg-rose-50 text-rose-700"></div>
@@ -389,7 +391,7 @@ async function novoLancamento(ctx){
     if(just.value.trim().length<MIN_JUST){ toast(`Justificativa precisa de ao menos ${MIN_JUST} caracteres.`,"err"); return; }
     const payload={
       servidor_id: isRH ? (servFixoRH || f.servidor_id.value) : ctx.servidorFixo,
-      data:f.data.value, horas:Number(f.horas.value),
+      data:f.data.value, horas:Number(f.horas.value), tipo,
       justificativa:just.value.trim(), registrado_por:SESSION.user.id
     };
     if(isRH){ payload.status="aprovado"; payload.aprovado_por=SESSION.user.id; payload.aprovado_em=new Date().toISOString(); }
@@ -610,7 +612,8 @@ async function viewLancamentos(){
           <option value="aprovado"${status==="aprovado"?" selected":""}>Aprovado</option>
           <option value="rejeitado"${status==="rejeitado"?" selected":""}>Negado</option>
         </select>
-        <button onclick="novoLancamento({rh:true})" class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Novo</button>
+        <button onclick="novoLancamento({rh:true,tipo:'extra'})" class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Horas</button>
+        <button onclick="novoLancamento({rh:true,tipo:'noturno'})" class="bg-slate-800 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Noturno</button>
       </div>
     </div>
     <div class="mb-3 text-sm text-slate-500">Total no filtro (exclui negados): <b class="text-slate-800">${hh(horas)}</b> · ${rows.length} lançamento(s)</div>
@@ -897,8 +900,9 @@ async function viewRelatorio(){
   const map={};
   filtrados.forEach(r=>{
     const k=r.servidor_id;
-    if(!map[k]) map[k]={matricula:r.matricula,nome:r.servidor_nome,sigla:r.chefia_sigla||r.chefia_nome||"—",horas:0,justs:new Set()};
-    map[k].horas+=Number(r.horas);
+    if(!map[k]) map[k]={matricula:r.matricula,nome:r.servidor_nome,sigla:r.chefia_sigla||r.chefia_nome||"—",horas:0,horasNoturno:0,justs:new Set()};
+    if(r.tipo==="noturno") map[k].horasNoturno+=Number(r.horas);
+    else map[k].horas+=Number(r.horas);
     const j=(r.justificativa||"").trim();
     if(j) map[k].justs.add(j);
   });
@@ -920,13 +924,13 @@ async function viewRelatorio(){
     <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
       <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
         <th class="px-3 py-2 font-medium">Matrícula</th><th class="px-3 py-2 font-medium">Nome</th>
-        <th class="px-3 py-2 font-medium">Setor</th><th class="px-3 py-2 font-medium text-center">Horas no mês</th>
+        <th class="px-3 py-2 font-medium">Setor</th><th class="px-3 py-2 font-medium text-center">Horas extra / Noturno</th>
         <th class="px-3 py-2 font-medium">Justificativas (distintas)</th></tr></thead>
       <tbody>${lista.map(x=>`<tr class="border-b border-slate-100 align-top">
         <td class="px-3 py-2 text-sm">${esc(x.matricula)}</td>
         <td class="px-3 py-2 text-sm font-medium">${esc(x.nome)}</td>
         <td class="px-3 py-2 text-sm">${esc(x.sigla)}</td>
-        <td class="px-3 py-2 text-sm text-center font-semibold">${hh(x.horas)}</td>
+        <td class="px-3 py-2 text-sm text-center font-semibold">${hh(x.horas)}/${hh(x.horasNoturno)}</td>
         <td class="px-3 py-2 text-sm"><ul class="list-disc pl-4 space-y-0.5">${[...x.justs].map(j=>`<li>${esc(j)}</li>`).join("")}</ul></td>
       </tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 py-8 text-sm">Sem dados no período.</td></tr>`}</tbody></table></div>`;
   $("#rl-comp").onchange=e=>{window.__compRel=e.target.value;go("relatorio");};
@@ -936,10 +940,10 @@ function exportarExcel(){
   const lista=window.__rel||[];
   if(!lista.length){toast("Nada para exportar.","info");return;}
   if(!window.XLSX){toast("Biblioteca Excel ainda carregando. Tente de novo em instantes.","err");return;}
-  const aoa=[["Matrícula","Nome","Setor","Horas no mês","Justificativa"],
-    ...lista.map(x=>[x.matricula,x.nome,x.sigla,Number(x.horas),[...x.justs].join("; ")])];
+  const aoa=[["Matrícula","Nome","Setor","Horas extras","Adicional noturno","Justificativa"],
+    ...lista.map(x=>[x.matricula,x.nome,x.sigla,Number(x.horas),Number(x.horasNoturno),[...x.justs].join("; ")])];
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"]=[{wch:12},{wch:26},{wch:10},{wch:14},{wch:60}];
+  ws["!cols"]=[{wch:12},{wch:26},{wch:10},{wch:14},{wch:16},{wch:60}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Horas Extras");
   XLSX.writeFile(wb, `horas_extras_${window.__compRel||thisMonth()}.xlsx`);
 }
@@ -957,11 +961,11 @@ function exportarPDF(){
   doc.text(`Horas Extras Referente ${mesAno(comp)}`, W/2, 64, {align:"center"});
   doc.autoTable({
     startY:86,
-    head:[["Matrícula","Nome","Setor","Horas no mês","Justificativa"]],
-    body:lista.map(x=>[x.matricula, x.nome, x.sigla, hh(x.horas), [...x.justs].join("; ")]),
+    head:[["Matrícula","Nome","Setor","Horas extra / Noturno","Justificativa"]],
+    body:lista.map(x=>[x.matricula, x.nome, x.sigla, `${hh(x.horas)}/${hh(x.horasNoturno)}`, [...x.justs].join("; ")]),
     styles:{fontSize:8,cellPadding:3,overflow:"linebreak"},
     headStyles:{fillColor:[79,70,229],textColor:255},
-    columnStyles:{0:{cellWidth:60},2:{cellWidth:55},3:{cellWidth:60,halign:"center"},4:{cellWidth:200}},
+    columnStyles:{0:{cellWidth:60},2:{cellWidth:55},3:{cellWidth:70,halign:"center"},4:{cellWidth:190}},
     margin:{left:40,right:40}
   });
   let yy=(doc.lastAutoTable?doc.lastAutoTable.finalY:120)+40;
