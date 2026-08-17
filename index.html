@@ -4,32 +4,53 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Gestão de Horas Extras</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+// ---- Identidade visual SDU Sul / Prefeitura de Teresina ----
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        sdu:     { DEFAULT:"#164194", 900:"#0F2F6D", 700:"#164194", 600:"#1D51B8", 100:"#E8EEFA" },
+        ciano:   { DEFAULT:"#00B1EB", 600:"#0092C4", 100:"#E0F5FD" },
+        verde:   { DEFAULT:"#13B538", 700:"#0E8A2A", 100:"#E6F7EA" },
+        amarelo: { DEFAULT:"#FBBA00", 700:"#8A6500", 100:"#FFF4D6" },
+        tinta:   "#1D1D1B"
+      },
+      fontFamily: { sans:['Raleway','ui-sans-serif','system-ui','sans-serif'] }
+    }
+  }
+}
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial}
+  body{font-family:'Raleway',ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial}
+  h1,h2,h3{letter-spacing:-.01em}
   .fade{animation:fade .25s ease}
   @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
   ::-webkit-scrollbar{height:8px;width:8px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}
+  /* faixa institucional de 4 cores (timbrado oficial) */
+  .faixa4{display:flex;height:6px;width:100%}
+  .faixa4 > i{flex:1}
 </style>
 </head>
-<body class="bg-slate-100 text-slate-800">
+<body class="bg-slate-50 text-tinta">
 
 <!-- ===================== LOGIN ===================== -->
 <div id="auth-screen" class="min-h-screen flex items-center justify-center p-4">
   <div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-    <div class="bg-indigo-700 px-8 py-7 text-white">
-      <div class="flex items-center gap-3">
-        <div class="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center text-xl">⏱️</div>
-        <div>
-          <h1 class="text-lg font-semibold leading-tight">Gestão de Horas Extras</h1>
-          <p class="text-indigo-200 text-xs">Registro · Conferência · Relatório</p>
-        </div>
-      </div>
+    <div class="bg-sdu px-8 pt-7 pb-6 text-white">
+      <img src="data:image/png;base64,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" alt="SDU Sul — Superintendência de Desenvolvimento Urbano Sul · Prefeitura de Teresina" class="h-11 w-auto mb-5">
+      <h1 class="text-xl font-bold leading-tight">Gestão de Horas Extras</h1>
+      <p class="text-white/70 text-xs mt-0.5 font-medium">Registro · Conferência · Relatório</p>
     </div>
+    <div class="faixa4"><i class="bg-sdu"></i><i class="bg-ciano"></i><i class="bg-verde"></i><i class="bg-amarelo"></i></div>
     <div class="px-8 py-7">
       <div class="flex gap-2 mb-6 bg-slate-100 p-1 rounded-lg text-sm font-medium">
         <button id="tab-login"  class="flex-1 py-2 rounded-md bg-white shadow-sm">Entrar</button>
@@ -39,37 +60,37 @@
       <form id="form-login" class="space-y-4">
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">E-mail</label>
-          <input name="email" type="email" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="voce@orgao.gov.br">
+          <input name="email" type="email" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-ciano outline-none" placeholder="voce@orgao.gov.br">
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Senha</label>
-          <input name="password" type="password" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="••••••••">
+          <input name="password" type="password" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-ciano outline-none" placeholder="••••••••">
         </div>
-        <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition">Entrar</button>
+        <button class="w-full bg-sdu hover:bg-sdu-900 text-white font-medium py-2.5 rounded-lg text-sm transition">Entrar</button>
       </form>
 
       <form id="form-signup" class="space-y-4 hidden">
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Nome completo</label>
-          <input name="nome" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Seu nome">
+          <input name="nome" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-ciano outline-none" placeholder="Seu nome">
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Matrícula <span class="text-rose-500">*</span></label>
-          <input name="matricula" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Sua matrícula funcional">
+          <input name="matricula" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-ciano outline-none" placeholder="Sua matrícula funcional">
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Setor <span class="text-rose-500">*</span></label>
-          <select name="chefia_id" id="signup-chefia" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"></select>
+          <select name="chefia_id" id="signup-chefia" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-ciano outline-none"></select>
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">E-mail</label>
-          <input name="email" type="email" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="voce@orgao.gov.br">
+          <input name="email" type="email" required class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-ciano outline-none" placeholder="voce@orgao.gov.br">
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">Senha</label>
-          <input name="password" type="password" required minlength="6" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="mínimo 6 caracteres">
+          <input name="password" type="password" required minlength="6" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-ciano outline-none" placeholder="mínimo 6 caracteres">
         </div>
-        <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition">Criar conta</button>
+        <button class="w-full bg-sdu hover:bg-sdu-900 text-white font-medium py-2.5 rounded-lg text-sm transition">Criar conta</button>
         <p class="text-xs text-slate-400">Escolha o seu setor. O 1º cadastro do sistema vira RH.</p>
       </form>
 
@@ -80,13 +101,13 @@
 
 <!-- ===================== APP ===================== -->
 <div id="app-screen" class="hidden min-h-screen flex flex-col">
-  <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="h-9 w-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center">⏱️</div>
-        <div>
-          <div class="font-semibold text-sm leading-tight">Gestão de Horas Extras</div>
-          <div id="hdr-papel" class="text-xs text-slate-400">—</div>
+  <header class="bg-white border-b-2 border-sdu sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <img src="data:image/png;base64,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" alt="SDU Sul — Superintendência de Desenvolvimento Urbano Sul · Prefeitura de Teresina" class="h-8 sm:h-9 w-auto shrink-0">
+        <div class="hidden md:block pl-3 border-l border-slate-200">
+          <div class="font-semibold text-sm leading-tight text-sdu">Gestão de Horas Extras</div>
+          <div id="hdr-papel" class="text-xs text-slate-500 font-medium">—</div>
         </div>
       </div>
       <div class="flex items-center gap-3">
@@ -94,7 +115,7 @@
           <div id="hdr-nome" class="text-sm font-medium leading-tight">—</div>
           <div id="hdr-mat" class="text-xs text-slate-400">—</div>
         </div>
-        <div id="hdr-avatar" class="h-9 w-9 rounded-full bg-indigo-100 text-indigo-700 font-semibold flex items-center justify-center text-sm">?</div>
+        <div id="hdr-avatar" class="h-9 w-9 rounded-full bg-sdu-100 text-sdu font-semibold flex items-center justify-center text-sm">?</div>
         <button id="btn-logout" class="text-sm text-slate-500 hover:text-rose-600 border border-slate-200 rounded-lg px-3 py-1.5">Sair</button>
       </div>
     </div>
@@ -102,7 +123,14 @@
   </header>
 
   <main id="content" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6"></main>
-  <footer class="text-center text-xs text-slate-400 py-4">Horas Extras · acesso por perfil protegido (RLS)</footer>
+  <footer class="mt-auto">
+    <div class="faixa4"><i class="bg-sdu"></i><i class="bg-ciano"></i><i class="bg-verde"></i><i class="bg-amarelo"></i></div>
+    <div class="bg-white px-4 py-5 text-center">
+      <div class="text-xs text-tinta font-semibold">SDU Sul · Superintendência de Desenvolvimento Urbano - Sul</div>
+      <div class="text-xs text-slate-500 mt-0.5">Prefeitura Municipal de Teresina</div>
+      <div class="text-[11px] text-slate-400 mt-2">Gestão de Horas Extras · acesso por perfil protegido (RLS)</div>
+    </div>
+  </footer>
 </div>
 
 <div id="toast" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
@@ -111,7 +139,7 @@
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg fade max-h-[92vh] overflow-y-auto">
     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white">
       <h3 id="modal-title" class="font-semibold">Título</h3>
-      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">&times;</button>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-tinta text-xl leading-none">&times;</button>
     </div>
     <div id="modal-body" class="px-6 py-5"></div>
   </div>
@@ -125,7 +153,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const PAPEL_LABEL = { servidor:"Servidor", chefia:"Chefia", rh:"RH / Administração" };
 const MIN_JUST = 20;
-let SESSION=null, PERFIL=null, CURRENT_TAB=null, CFG={teto_diario_horas:2, mes_aberto:null};
+let SESSION=null, PERFIL=null, CURRENT_TAB=null, CFG={teto_diario_horas:2, teto_mensal_horas:null, mes_aberto:null};
 
 // ====================== HELPERS ======================
 const $ = s => document.querySelector(s);
@@ -141,22 +169,23 @@ function mesAno(comp){ const d=new Date(comp+"-01T00:00:00"); const m=d.toLocale
 function ultimoDia(comp){ const [y,m]=comp.split("-").map(Number); return `${comp}-`+String(new Date(y,m,0).getDate()).padStart(2,"0"); }
 
 function toast(msg, tipo="ok"){
-  const c={ok:"bg-emerald-600",err:"bg-rose-600",info:"bg-slate-800"}[tipo];
+  const c={ok:"bg-verde",err:"bg-rose-600",info:"bg-slate-800"}[tipo];
   const d=document.createElement("div");
   d.className=`${c} text-white text-sm px-4 py-2.5 rounded-lg shadow-lg fade max-w-sm`;
   d.textContent=msg; $("#toast").appendChild(d); setTimeout(()=>d.remove(),5000);
 }
 function statusBadge(s){
-  const m={pendente:"bg-amber-100 text-amber-700",aprovado:"bg-emerald-100 text-emerald-700",rejeitado:"bg-rose-100 text-rose-700"};
+  const m={pendente:"bg-amarelo-100 text-amarelo-700",aprovado:"bg-verde-100 text-verde-700",rejeitado:"bg-rose-100 text-rose-700"};
   const t={pendente:"Pendente",aprovado:"Aprovado",rejeitado:"Negado"};
   return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${m[s]}">${t[s]}</span>`;
 }
 function openModal(title,html){ $("#modal-title").textContent=title; $("#modal-body").innerHTML=html; $("#modal").classList.remove("hidden"); }
 function closeModal(){ $("#modal").classList.add("hidden"); $("#modal-body").innerHTML=""; }
-function stat(label,val,cor){
-  const c={indigo:"text-indigo-600",emerald:"text-emerald-600",amber:"text-amber-600",rose:"text-rose-600",slate:"text-slate-700"}[cor]||"text-slate-700";
-  return `<div class="bg-white border border-slate-200 rounded-xl p-4"><div class="text-xs text-slate-400">${label}</div><div class="text-xl font-semibold mt-1 ${c}">${val}</div></div>`;
+function stat(label,val,cor,hint){
+  const c={indigo:"text-sdu",emerald:"text-verde-700",amber:"text-amarelo-700",rose:"text-rose-600",slate:"text-tinta"}[cor]||"text-tinta";
+  return `<div class="bg-white border border-slate-200 rounded-xl p-4"><div class="text-xs text-slate-400">${label}</div><div class="text-xl font-semibold mt-1 ${c}">${val}</div>${hint?`<div class="text-xs text-slate-400 mt-1">${hint}</div>`:""}</div>`;
 }
+const tetoMensal = () => Number(CFG.teto_mensal_horas)>0 ? Number(CFG.teto_mensal_horas) : null;
 function card(html){ return `<div class="bg-white border border-slate-200 rounded-xl p-5 max-w-lg mx-auto fade">${html}</div>`; }
 
 // ====================== AUTH ======================
@@ -173,7 +202,7 @@ function swapAuth(login){
 function authMsg(msg,err){
   const p=$("#auth-msg");
   if(!msg){p.classList.add("hidden");return;}
-  p.className=`mt-4 text-sm rounded-lg px-3 py-2 ${err?"bg-rose-50 text-rose-700":"bg-emerald-50 text-emerald-700"}`;
+  p.className=`mt-4 text-sm rounded-lg px-3 py-2 ${err?"bg-rose-50 text-rose-700":"bg-verde-100 text-verde-700"}`;
   p.textContent=msg;
 }
 $("#form-login").onsubmit=async e=>{
@@ -248,7 +277,7 @@ function tabsFor(p){
 }
 function renderNav(){
   const tabs=tabsFor(PERFIL.papel);
-  $("#nav").innerHTML=tabs.map(([k,l])=>`<button data-tab="${k}" class="navbtn whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-indigo-600">${l}</button>`).join("");
+  $("#nav").innerHTML=tabs.map(([k,l])=>`<button data-tab="${k}" class="navbtn whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-ciano">${l}</button>`).join("");
   $("#nav").querySelectorAll(".navbtn").forEach(b=>b.onclick=()=>go(b.dataset.tab));
   go(tabs[0][0]);
 }
@@ -256,7 +285,7 @@ function go(tab){
   CURRENT_TAB=tab;
   $("#nav").querySelectorAll(".navbtn").forEach(b=>{
     const on=b.dataset.tab===tab;
-    b.className=`navbtn whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 ${on?"border-indigo-600 text-indigo-700":"border-transparent text-slate-500 hover:text-indigo-600"}`;
+    b.className=`navbtn whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 ${on?"border-sdu text-sdu":"border-transparent text-slate-500 hover:text-ciano"}`;
   });
   const fn={meus:viewMeus,aprovacoes:viewAprovacoes,equipe:viewEquipe,painel:viewPainel,lancamentos:viewLancamentos,servidores:viewServidores,chefias:viewChefias,ajustes:viewAjustes,relatorio:viewRelatorio}[tab];
   $("#content").innerHTML=`<div class="text-slate-400 text-sm py-10 text-center">Carregando…</div>`;
@@ -296,7 +325,7 @@ async function getBloqueados(comp){
 // ====================== TABELA DE REGISTROS ======================
 function retornoChefia(r){
   let s="";
-  if(r.horas_original!=null) s+=`<div class="text-xs text-indigo-600">Ajustado de ${hh(r.horas_original)} → ${hh(r.horas)} pela chefia</div>`;
+  if(r.horas_original!=null) s+=`<div class="text-xs text-sdu">Ajustado de ${hh(r.horas_original)} → ${hh(r.horas)} pela chefia</div>`;
   if(r.status!=="pendente"){
     s+=`<div class="text-xs text-slate-400">${r.status==="aprovado"?"Aprovado":"Negado"} em ${fmtDataHora(r.aprovado_em)}</div>`;
     if(r.observacao_aprovacao) s+=`<div class="text-xs text-slate-500 italic">“${esc(r.observacao_aprovacao)}”</div>`;
@@ -318,7 +347,7 @@ function tabela(rows,{servidor=true,retorno=false,acoes=null,justificativa=true}
     ${rows.map(r=>`<tr class="border-b border-slate-100 hover:bg-slate-50 align-top">
       <td class="px-3 py-2 text-sm whitespace-nowrap">${fmtData(r.data)}</td>
       ${servidor?`<td class="px-3 py-2 text-sm"><div class="font-medium">${esc(r.servidor_nome)}</div><div class="text-xs text-slate-400">${esc(r.matricula||"")}${r.chefia_sigla?" · "+esc(r.chefia_sigla):""}</div></td>`:""}
-      <td class="px-3 py-2 text-sm text-center whitespace-nowrap">${hh(r.horas)}${r.tipo==="noturno"?'<div class="text-[10px] text-indigo-500 font-medium">Noturno</div>':""}</td>
+      <td class="px-3 py-2 text-sm text-center whitespace-nowrap">${hh(r.horas)}${r.tipo==="noturno"?'<div class="text-[10px] text-ciano font-medium">Noturno</div>':""}</td>
       ${justificativa?`<td class="px-3 py-2 text-sm max-w-xs"><div class="line-clamp-2">${esc(r.justificativa)}</div></td>`:""}
       <td class="px-3 py-2 text-center">${statusBadge(r.status)}</td>
       ${retorno?`<td class="px-3 py-2">${retornoChefia(r)}</td>`:""}
@@ -341,7 +370,7 @@ async function novoLancamento(ctx){
   if(!isRH && CFG.mes_aberto){
     const ini=CFG.mes_aberto+"-01", fim=ultimoDia(CFG.mes_aberto);
     minAttr=`min="${ini}"`; maxAttr=`max="${fim < hoje() ? fim : hoje()}"`;
-    hint=`<p class="text-xs text-amber-600">Lançamentos liberados apenas para ${compLabel(CFG.mes_aberto)}.</p>`;
+    hint=`<p class="text-xs text-amarelo-700">Lançamentos liberados apenas para ${compLabel(CFG.mes_aberto)}.</p>`;
   }
   const maxHoras = isRH ? "" : `max="${CFG.teto_diario_horas}"`;
   openModal(isNoturno?"Novo lançamento de adicional noturno":"Novo lançamento de horas extras",`
@@ -355,6 +384,7 @@ async function novoLancamento(ctx){
             </select></div>`)
       :""}
       ${isRH?`<p class="text-xs text-slate-400">Como RH, não há limite de horas nem bloqueio de dia, e o lançamento já entra aprovado.</p>`:""}
+      ${!isRH && tetoMensal()!=null?`<p class="text-xs text-slate-500">Limite mensal: <b>${hh(tetoMensal())}</b> por servidor (pendentes + aprovadas).</p>`:""}
       <div class="grid grid-cols-2 gap-3">
         <div><label class="block text-xs font-medium text-slate-600 mb-1">Data</label>
           <input name="data" type="date" required value="${hoje()}" ${minAttr} ${maxAttr} class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
@@ -370,7 +400,7 @@ async function novoLancamento(ctx){
       <div id="lanc-aviso" class="hidden text-xs rounded-lg px-3 py-2 bg-rose-50 text-rose-700"></div>
       <div class="flex gap-2 pt-1">
         <button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
-        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button>
+        <button class="flex-1 py-2.5 rounded-lg bg-sdu text-white text-sm font-medium">Salvar</button>
       </div>
     </form>`);
   const f=$("#f-lanc");
@@ -405,7 +435,8 @@ function traduzDB(m){
   if(/futura/i.test(m)) return "Não é possível lançar horas em data futura.";
   if(/competencia/i.test(m)) return m;
   if(/bloqueado/i.test(m)) return m;
-  if(/Teto diario/i.test(m)) return m.replace("diario","diário");
+  if(/Teto diario/i.test(m)) return m.replace("diario","diário").replace("ja ha","já há").replace("lancadas","lançadas");
+  if(/Teto mensal/i.test(m)) return m.replace("ja ha","já há").replace("lancadas","lançadas");
   if(/duplicate key/i.test(m)) return "Registro duplicado.";
   return m;
 }
@@ -422,7 +453,7 @@ function editarMeu(r){
       <div><label class="block text-xs font-medium text-slate-600 mb-1">Justificativa (mín. ${MIN_JUST})</label>
         <textarea name="justificativa" rows="3" required minlength="${MIN_JUST}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">${esc(r.justificativa)}</textarea></div>
       <div class="flex gap-2"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
-        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
+        <button class="flex-1 py-2.5 rounded-lg bg-sdu text-white text-sm font-medium">Salvar</button></div>
     </form>`);
   $("#f-ed").onsubmit=async ev=>{
     ev.preventDefault();const f=ev.target;
@@ -441,15 +472,17 @@ async function excluir(r){
 
 // ====================== DECISÃO / AJUSTE ======================
 function gerenciar(r){
+  const isRH = PERFIL && PERFIL.papel==="rh";
+  const maxHoras = isRH ? "" : `max="${CFG.teto_diario_horas}"`;
   openModal("Conferir lançamento",`
     <div class="text-sm space-y-1 mb-4 bg-slate-50 rounded-lg p-3">
       <div><b>${esc(r.servidor_nome)}</b> · ${esc(r.matricula||"")}</div>
-      <div>${fmtData(r.data)} · solicitado: <b>${hh(r.horas)}</b></div>
+      <div>${fmtData(r.data)} · solicitado: <b>${hh(r.horas)}</b>${r.tipo==="noturno"?' <span class="text-ciano">(Noturno)</span>':""}</div>
       <div class="text-slate-500">Justificativa: ${esc(r.justificativa)}</div>
     </div>
     <form id="f-ger" class="space-y-3">
-      <div><label class="block text-xs font-medium text-slate-600 mb-1">Horas (ajuste se necessário — máx. ${hh(CFG.teto_diario_horas)})</label>
-        <input name="horas" type="number" step="0.5" min="0.5" max="${CFG.teto_diario_horas}" required value="${r.horas}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+      <div><label class="block text-xs font-medium text-slate-600 mb-1">Horas ${isRH?"":`(ajuste se necessário — máx. ${hh(CFG.teto_diario_horas)})`}</label>
+        <input name="horas" type="number" step="0.5" min="0.5" ${maxHoras} required value="${r.horas}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
       <div><label class="block text-xs font-medium text-slate-600 mb-1">Situação</label>
         <select name="status" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
           <option value="aprovado"${r.status==="aprovado"?" selected":""}>Aprovar</option>
@@ -459,7 +492,7 @@ function gerenciar(r){
       <div><label class="block text-xs font-medium text-slate-600 mb-1">Observação ao servidor</label>
         <textarea name="obs" rows="2" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Mensagem sobre a decisão/ajuste">${esc(r.observacao_aprovacao||"")}</textarea></div>
       <div class="flex gap-2"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
-        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
+        <button class="flex-1 py-2.5 rounded-lg bg-sdu text-white text-sm font-medium">Salvar</button></div>
     </form>`);
   $("#f-ger").onsubmit=async ev=>{
     ev.preventDefault();const f=ev.target;
@@ -487,23 +520,52 @@ async function viewMeus(){
       <p class="text-sm text-slate-500 mt-1">Sua matrícula (${esc(PERFIL.matricula||"—")}) ainda não está ligada a um servidor. Peça ao RH para vincular.</p></div>`);
     return;
   }
+  const todos = window.__meusComp==="";                    // "" = histórico completo
+  const comp  = todos ? "" : (window.__meusComp || thisMonth());
   const rows=await getRegistros({servidor_id:PERFIL.servidor_id});
-  const mesRows=rows.filter(r=>r.data.slice(0,7)===thisMonth());
-  const horasAprov=mesRows.filter(r=>r.status==="aprovado").reduce((a,r)=>a+Number(r.horas),0);
-  const pend=rows.filter(r=>r.status==="pendente").length;
+  const per = todos ? rows : rows.filter(r=>r.data.slice(0,7)===comp);
+
+  const soma = st => per.filter(r=>st?r.status===st:true).reduce((a,r)=>a+Number(r.horas),0);
+  const hPend=soma("pendente"), hAprov=soma("aprovado"), hNeg=soma("rejeitado");
+  const hTotal=hPend+hAprov+hNeg;
+  const periodo = todos ? "todo o período" : compLabel(comp);
+
+  // teto mensal: só faz sentido quando um mês específico está selecionado
+  const tm=tetoMensal();
+  const consumido=hPend+hAprov;
+  const restante=tm!=null ? Math.max(0, tm-consumido) : null;
+  const hintTotal = tm!=null && !todos
+      ? `Teto mensal ${hh(tm)} · ${restante>0?`restam ${hh(restante)}`:"teto atingido"}`
+      : (hNeg>0 ? `inclui ${hh(hNeg)} negada(s)` : "");
+
   $("#content").innerHTML=`
-    <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div><h2 class="text-lg font-semibold">Meus lançamentos</h2><p class="text-sm text-slate-500">Registre suas horas extras e acompanhe a decisão da chefia.</p></div>
-      <button onclick="novoLancamento({servidorFixo:'${PERFIL.servidor_id}'})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg">+ Novo lançamento</button>
+      <button onclick="novoLancamento({servidorFixo:'${PERFIL.servidor_id}'})" class="bg-sdu hover:bg-sdu-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg">+ Novo lançamento</button>
     </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
-      ${stat("Horas aprovadas no mês",hh(horasAprov),"emerald")}
-      ${stat("Lançamentos no mês",mesRows.length,"indigo")}
-      ${stat("Pendentes",pend,"amber")}
+
+    <div class="flex items-center gap-3 mb-4 flex-wrap">
+      <span class="text-sm text-slate-500">Resumo de</span>
+      <input id="meus-comp" type="month" value="${todos?thisMonth():comp}" ${todos?"disabled":""}
+             class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm ${todos?"opacity-50":""}">
+      <label class="flex items-center gap-1.5 text-sm text-slate-500 select-none">
+        <input id="meus-todos" type="checkbox" class="w-4 h-4 align-middle" ${todos?"checked":""}> ver todo o histórico
+      </label>
+      <span class="text-xs text-slate-400">${esc(periodo)}</span>
     </div>
-    ${tabela(rows,{servidor:false,retorno:true,acoes:r=> r.status==="pendente"
-      ? `<button onclick='editarMeu(${JSON.stringify(r)})' class="text-xs text-indigo-600 hover:underline mr-2">editar</button><button onclick='excluir(${JSON.stringify(r)})' class="text-xs text-rose-600 hover:underline">excluir</button>`
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+      ${stat("Total de horas lançadas",hh(hTotal),"indigo",hintTotal)}
+      ${stat("Pendentes de aprovação",hh(hPend),"amber",`${per.filter(r=>r.status==="pendente").length} lançamento(s)`)}
+      ${stat("Aprovadas",hh(hAprov),"emerald",`${per.filter(r=>r.status==="aprovado").length} lançamento(s)`)}
+    </div>
+
+    ${tabela(per,{servidor:false,retorno:true,acoes:r=> r.status==="pendente"
+      ? `<button onclick='editarMeu(${JSON.stringify(r)})' class="text-xs text-sdu hover:underline mr-2">editar</button><button onclick='excluir(${JSON.stringify(r)})' class="text-xs text-rose-600 hover:underline">excluir</button>`
       : `<span class="text-xs text-slate-300">—</span>`})}`;
+
+  $("#meus-comp").onchange=e=>{ window.__meusComp=e.target.value||thisMonth(); go("meus"); };
+  $("#meus-todos").onchange=e=>{ window.__meusComp = e.target.checked ? "" : thisMonth(); go("meus"); };
 }
 
 // ====================== VIEW: CHEFIA ======================
@@ -516,14 +578,14 @@ async function viewAprovacoes(){
     <td class="px-3 py-2 text-sm text-center whitespace-nowrap">${hh(r.horas)}</td>
     <td class="px-3 py-2 text-sm max-w-xs"><div class="line-clamp-2">${esc(r.justificativa)}</div></td>
     <td class="px-3 py-2 text-right whitespace-nowrap">
-      <button onclick='decidirRapido(${JSON.stringify(r)},true)' class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-md mr-1">Aprovar</button>
-      <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
+      <button onclick='decidirRapido(${JSON.stringify(r)},true)' class="text-xs bg-verde text-white px-2.5 py-1 rounded-md mr-1">Aprovar</button>
+      <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-sdu text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
       <button onclick='decidirRapido(${JSON.stringify(r)},false)' class="text-xs bg-rose-600 text-white px-2.5 py-1 rounded-md">Negar</button>
     </td></tr>`).join("");
   $("#content").innerHTML=`
     <div class="mb-4 flex items-center justify-between flex-wrap gap-3">
       <div><h2 class="text-lg font-semibold">Conferência da equipe</h2><p class="text-sm text-slate-500">Confira, ajuste, aprove ou negue as horas do seu setor. Marque vários e use "Aprovar selecionados".</p></div>
-      <button id="btn-aprovar-sel" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">✓ Aprovar selecionados</button>
+      <button id="btn-aprovar-sel" class="bg-verde hover:bg-verde-700 text-white text-sm font-medium px-4 py-2 rounded-lg">✓ Aprovar selecionados</button>
     </div>
     ${rows.length?`<div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
       <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
@@ -581,7 +643,7 @@ async function viewPainel(){
   const horasAprov=rows.filter(r=>r.status==="aprovado").reduce((a,r)=>a+Number(r.horas),0);
   $("#content").innerHTML=`
     <div class="mb-5"><h2 class="text-lg font-semibold">Painel — ${compLabel(comp)}</h2>
-      ${CFG.mes_aberto?`<p class="text-xs text-emerald-600 mt-1">Lançamentos liberados para ${compLabel(CFG.mes_aberto)}.</p>`:`<p class="text-xs text-slate-400 mt-1">Lançamentos liberados para todos os meses.</p>`}</div>
+      ${CFG.mes_aberto?`<p class="text-xs text-verde-700 mt-1">Lançamentos liberados para ${compLabel(CFG.mes_aberto)}.</p>`:`<p class="text-xs text-slate-400 mt-1">Lançamentos liberados para todos os meses.</p>`}</div>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
       ${stat("Horas aprovadas",hh(horasAprov),"emerald")}
       ${stat("Pendentes",pend.length,"amber")}
@@ -589,10 +651,10 @@ async function viewPainel(){
       ${stat("Dias bloqueados no mês",bloq.length,"rose")}
     </div>
     <div class="flex items-center justify-between mb-3"><h3 class="font-semibold text-sm">Pendências</h3>
-      ${pend.length?`<button onclick="go('lancamentos')" class="text-xs text-indigo-600 hover:underline">ver lançamentos →</button>`:""}</div>
+      ${pend.length?`<button onclick="go('lancamentos')" class="text-xs text-sdu hover:underline">ver lançamentos →</button>`:""}</div>
     ${tabela(pend.slice(0,8),{acoes:r=>`
-      <button onclick='decidirRapido(${JSON.stringify(r)},true)' class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-md mr-1">Aprovar</button>
-      <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
+      <button onclick='decidirRapido(${JSON.stringify(r)},true)' class="text-xs bg-verde text-white px-2.5 py-1 rounded-md mr-1">Aprovar</button>
+      <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-sdu text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
       <button onclick='decidirRapido(${JSON.stringify(r)},false)' class="text-xs bg-rose-600 text-white px-2.5 py-1 rounded-md">Negar</button>`})}`;
 }
 
@@ -612,13 +674,13 @@ async function viewLancamentos(){
           <option value="aprovado"${status==="aprovado"?" selected":""}>Aprovado</option>
           <option value="rejeitado"${status==="rejeitado"?" selected":""}>Negado</option>
         </select>
-        <button onclick="novoLancamento({rh:true,tipo:'extra'})" class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Horas</button>
+        <button onclick="novoLancamento({rh:true,tipo:'extra'})" class="bg-sdu text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Horas</button>
         <button onclick="novoLancamento({rh:true,tipo:'noturno'})" class="bg-slate-800 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Noturno</button>
       </div>
     </div>
-    <div class="mb-3 text-sm text-slate-500">Total no filtro (exclui negados): <b class="text-slate-800">${hh(horas)}</b> · ${rows.length} lançamento(s)</div>
+    <div class="mb-3 text-sm text-slate-500">Total no filtro (exclui negados): <b class="text-tinta">${hh(horas)}</b> · ${rows.length} lançamento(s)</div>
     ${tabela(rows,{retorno:true,acoes:r=>`
-      <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
+      <button onclick='gerenciar(${JSON.stringify(r)})' class="text-xs bg-sdu text-white px-2.5 py-1 rounded-md mr-1">Ajustar</button>
       <button onclick='excluir(${JSON.stringify(r)})' class="text-xs text-rose-600 hover:underline">excluir</button>`})}`;
   $("#fl-comp").onchange=e=>{window.__comp=e.target.value;go("lancamentos");};
   $("#fl-status").onchange=e=>{window.__status=e.target.value;go("lancamentos");};
@@ -635,7 +697,7 @@ async function viewServidores(){
   $("#content").innerHTML=`
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3"><div><h2 class="text-lg font-semibold">Servidores</h2>
       <p class="text-sm text-slate-500">Lista de todos os servidores e seus acessos. Lance horas, edite dados, defina o papel ou exclua.</p></div>
-      <button onclick='editarServidor(null)' class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Novo servidor</button></div>
+      <button onclick='editarServidor(null)' class="bg-sdu text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Novo servidor</button></div>
     <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
       <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
         <th class="px-3 py-2 font-medium">Nome</th><th class="px-3 py-2 font-medium">Matrícula</th>
@@ -647,9 +709,9 @@ async function viewServidores(){
         <td class="px-3 py-2 text-sm">${esc(setorTxt(s))}</td>
         <td class="px-3 py-2 text-sm">${perfilByServ[s.id]?PAPEL_LABEL[perfilByServ[s.id].papel]:'<span class="text-slate-400">sem login</span>'}</td>
         <td class="px-3 py-2 text-right whitespace-nowrap">
-          <button onclick='novoLancamento({rh:true,servidorFixo:"${s.id}"})' class="text-xs text-emerald-600 hover:underline mr-2">+ horas</button>
-          <button onclick='editarServidor("${s.id}")' class="text-xs text-indigo-600 hover:underline mr-2">editar</button>
-          ${perfilByServ[s.id]?`<button onclick='redefinirSenha("${perfilByServ[s.id].user_id}")' class="text-xs text-amber-600 hover:underline mr-2">senha</button>`:""}
+          <button onclick='novoLancamento({rh:true,servidorFixo:"${s.id}"})' class="text-xs text-verde-700 hover:underline mr-2">+ horas</button>
+          <button onclick='editarServidor("${s.id}")' class="text-xs text-sdu hover:underline mr-2">editar</button>
+          ${perfilByServ[s.id]?`<button onclick='redefinirSenha("${perfilByServ[s.id].user_id}")' class="text-xs text-amarelo-700 hover:underline mr-2">senha</button>`:""}
           <button onclick='excluirServidor("${s.id}")' class="text-xs text-rose-600 hover:underline">excluir</button>
         </td>
       </tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 py-8 text-sm">Nenhum servidor ainda.</td></tr>`}</tbody></table></div>
@@ -660,7 +722,7 @@ async function viewServidores(){
         <tbody>${semVinc.map(p=>`<tr class="border-b border-slate-100">
           <td class="px-3 py-2 text-sm"><div class="font-medium">${esc(p.nome||"—")}</div><div class="text-xs text-slate-400">${esc(p.email||"")}</div></td>
           <td class="px-3 py-2 text-sm">${PAPEL_LABEL[p.papel]}</td>
-          <td class="px-3 py-2 text-right"><button onclick='redefinirSenha("${p.user_id}")' class="text-xs text-amber-600 hover:underline mr-2">senha</button><button onclick='editarAcesso(${JSON.stringify(p)})' class="text-xs text-indigo-600 hover:underline">gerenciar</button></td>
+          <td class="px-3 py-2 text-right"><button onclick='redefinirSenha("${p.user_id}")' class="text-xs text-amarelo-700 hover:underline mr-2">senha</button><button onclick='editarAcesso(${JSON.stringify(p)})' class="text-xs text-sdu hover:underline">gerenciar</button></td>
         </tr>`).join("")}</tbody></table></div></div>`:""}`;
 }
 function editarServidor(id){
@@ -683,7 +745,7 @@ function editarServidor(id){
           ${Object.entries(PAPEL_LABEL).map(([k,v])=>`<option value="${k}"${perfil.papel===k?" selected":""}>${v}</option>`).join("")}
         </select><p class="text-xs text-slate-400 mt-1">${esc(perfil.email||"")}</p></div>`:""}
       <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
-        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
+        <button class="flex-1 py-2.5 rounded-lg bg-sdu text-white text-sm font-medium">Salvar</button></div>
     </form>`);
   $("#f-serv").onsubmit=async ev=>{
     ev.preventDefault();const f=ev.target;
@@ -711,7 +773,7 @@ async function redefinirSenha(userId){
       <div><label class="block text-xs font-medium text-slate-600 mb-1">Nova senha (mín. 6 caracteres)</label>
         <input name="nova" type="text" required minlength="6" placeholder="ex: Mudar@2026" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
       <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
-        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Redefinir</button></div>
+        <button class="flex-1 py-2.5 rounded-lg bg-sdu text-white text-sm font-medium">Redefinir</button></div>
     </form>`);
   $("#f-rs").onsubmit=async ev=>{
     ev.preventDefault();
@@ -743,7 +805,7 @@ function editarAcesso(p){
         <select name="servidor_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">—</option>
           ${servs.map(s=>`<option value="${s.id}"${p.servidor_id===s.id?" selected":""}>${esc(s.nome)} · ${esc(s.matricula)}</option>`).join("")}</select></div>
       <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
-        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
+        <button class="flex-1 py-2.5 rounded-lg bg-sdu text-white text-sm font-medium">Salvar</button></div>
     </form>`);
   $("#f-ac").onsubmit=async ev=>{
     ev.preventDefault();const f=ev.target;
@@ -762,7 +824,7 @@ async function viewChefias(){
   $("#content").innerHTML=`
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div><h2 class="text-lg font-semibold">Chefias / Setores</h2><p class="text-sm text-slate-500">Unidades às quais os servidores se vinculam (ex: Chefia de Gabinete). Cada uma tem um responsável que aprova as horas.</p></div>
-      <button onclick='editarChefia(null)' class="bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Nova chefia</button>
+      <button onclick='editarChefia(null)' class="bg-sdu text-white text-sm font-medium px-3 py-1.5 rounded-lg">+ Nova chefia</button>
     </div>
     <div class="overflow-x-auto bg-white rounded-xl border border-slate-200"><table class="w-full">
       <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
@@ -774,7 +836,7 @@ async function viewChefias(){
         <td class="px-3 py-2 text-sm">${esc(nomeServ[c.responsavel_servidor_id]||"— não definido —")}</td>
         <td class="px-3 py-2 text-sm text-center">${cont[c.id]||0}</td>
         <td class="px-3 py-2 text-right whitespace-nowrap">
-          <button onclick='editarChefia("${c.id}")' class="text-xs text-indigo-600 hover:underline mr-2">editar</button>
+          <button onclick='editarChefia("${c.id}")' class="text-xs text-sdu hover:underline mr-2">editar</button>
           <button onclick='excluirChefia("${c.id}")' class="text-xs text-rose-600 hover:underline">excluir</button>
         </td>
       </tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 py-8 text-sm">Nenhuma chefia. Cadastre as unidades (ex: Chefia de Gabinete).</td></tr>`}</tbody></table></div>`;
@@ -797,7 +859,7 @@ function editarChefia(id){
         </select>
         <p class="text-xs text-slate-400 mt-1">Pode ser qualquer servidor da lista. Ele ganha acesso de chefia para aprovar as horas desta unidade.</p></div>
       <div class="flex gap-2 pt-1"><button type="button" onclick="closeModal()" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm">Cancelar</button>
-        <button class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium">Salvar</button></div>
+        <button class="flex-1 py-2.5 rounded-lg bg-sdu text-white text-sm font-medium">Salvar</button></div>
     </form>`);
   $("#f-ch").onsubmit=async ev=>{
     ev.preventDefault();const f=ev.target;
@@ -840,19 +902,22 @@ async function viewAjustes(){
   for(let d=1;d<=nDias;d++){
     const ds=`${comp}-${String(d).padStart(2,"0")}`; const b=set.has(ds);
     cells+=`<button onclick="toggleDia('${ds}',${b})" title="${b?esc(set.get(ds)||'Bloqueado'):'Liberado'}"
-      class="aspect-square rounded-lg text-sm flex items-center justify-center border ${b?'bg-rose-100 border-rose-300 text-rose-700 font-semibold':'bg-white border-slate-200 hover:border-indigo-300'}">${d}</button>`;
+      class="aspect-square rounded-lg text-sm flex items-center justify-center border ${b?'bg-rose-100 border-rose-300 text-rose-700 font-semibold':'bg-white border-slate-200 hover:border-ciano'}">${d}</button>`;
   }
   $("#content").innerHTML=`
-    <div class="mb-4"><h2 class="text-lg font-semibold">Ajustes</h2><p class="text-sm text-slate-500">Limite diário, mês liberado para lançamento e dias bloqueados.</p></div>
+    <div class="mb-4"><h2 class="text-lg font-semibold">Ajustes</h2><p class="text-sm text-slate-500">Limite diário, limite mensal, mês liberado para lançamento e dias bloqueados.</p></div>
     <div class="grid lg:grid-cols-2 gap-5">
       <form id="f-cfg" class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 h-fit">
         <h3 class="font-semibold text-sm">Parâmetros</h3>
         <div><label class="block text-xs font-medium text-slate-600 mb-1">Teto diário (horas)</label>
           <input name="teto_diario_horas" type="number" step="0.5" min="0" value="${c.teto_diario_horas}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">Teto mensal (horas por servidor)</label>
+          <input name="teto_mensal_horas" type="number" step="0.5" min="0" value="${c.teto_mensal_horas ?? ''}" placeholder="sem limite" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <p class="text-xs text-slate-400 mt-1">Soma das horas <b>pendentes + aprovadas</b> de cada servidor no mês. Deixe vazio (ou 0) para não limitar. O RH não é limitado.</p></div>
         <div><label class="block text-xs font-medium text-slate-600 mb-1">Mês liberado para lançamento</label>
           <input name="mes_aberto" type="month" value="${c.mes_aberto||''}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
           <p class="text-xs text-slate-400 mt-1">Os servidores só conseguem lançar nesse mês. Deixe vazio para liberar todos os meses. (Datas futuras nunca são permitidas.)</p></div>
-        <button class="bg-indigo-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg">Salvar parâmetros</button>
+        <button class="bg-sdu text-white text-sm font-medium px-4 py-2.5 rounded-lg">Salvar parâmetros</button>
       </form>
       <div class="bg-white border border-slate-200 rounded-xl p-5">
         <div class="flex items-center justify-between mb-3">
@@ -871,9 +936,10 @@ async function viewAjustes(){
   $("#cb-comp").onchange=e=>{window.__compBloq=e.target.value;go("ajustes");};
   $("#f-cfg").onsubmit=async ev=>{
     ev.preventDefault();const f=ev.target;
-    const {error}=await sb.from("he_config").update({teto_diario_horas:Number(f.teto_diario_horas.value),mes_aberto:f.mes_aberto.value||null,atualizado_em:new Date().toISOString()}).eq("id",1);
+    const tetoMes = f.teto_mensal_horas.value==="" ? null : Number(f.teto_mensal_horas.value);
+    const {error}=await sb.from("he_config").update({teto_diario_horas:Number(f.teto_diario_horas.value),teto_mensal_horas:tetoMes,mes_aberto:f.mes_aberto.value||null,atualizado_em:new Date().toISOString()}).eq("id",1);
     if(error){toast(error.message,"err");return;}
-    CFG.teto_diario_horas=Number(f.teto_diario_horas.value); CFG.mes_aberto=f.mes_aberto.value||null;
+    CFG.teto_diario_horas=Number(f.teto_diario_horas.value); CFG.teto_mensal_horas=tetoMes; CFG.mes_aberto=f.mes_aberto.value||null;
     toast("Ajustes salvos.");
   };
 }
@@ -892,9 +958,11 @@ async function toggleDia(ds,bloqueado){
 }
 
 // ====================== VIEW: RELATÓRIO (PDF / EXCEL) ======================
-async function viewRelatorio(){
-  const comp=window.__compRel||thisMonth();
-  const base=window.__baseRel||"aprovado";
+// Busca sempre os dados atuais (comp/base passados ou os selecionados na tela).
+// Nunca usa cache: evita exportar um mês diferente do que está sendo mostrado.
+async function relatorioData(comp,base){
+  comp=comp||window.__compRel||thisMonth();
+  base=base||window.__baseRel||"aprovado";
   const rows=await getRegistros({comp});
   const filtrados=rows.filter(r=> base==="aprovado" ? r.status==="aprovado" : r.status!=="rejeitado");
   const map={};
@@ -907,7 +975,14 @@ async function viewRelatorio(){
     if(j) map[k].justs.add(j);
   });
   const lista=Object.values(map).sort((a,b)=>a.nome.localeCompare(b.nome));
-  window.__rel=lista;
+  return {comp,base,lista};
+}
+async function viewRelatorio(){
+  const comp=window.__compRel||thisMonth();
+  const base=window.__baseRel||"aprovado";
+  const {lista}=await relatorioData(comp,base);
+  // se o usuário já trocou o filtro enquanto isto carregava, descarta (a chamada nova que está em andamento vai renderizar).
+  if((window.__compRel||thisMonth())!==comp || (window.__baseRel||"aprovado")!==base) return;
   $("#content").innerHTML=`
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div><h2 class="text-lg font-semibold">Relatório — ${compLabel(comp)}</h2><p class="text-sm text-slate-500">Horas por servidor; justificativas repetidas são suprimidas.</p></div>
@@ -917,7 +992,7 @@ async function viewRelatorio(){
           <option value="aprovado"${base==="aprovado"?" selected":""}>Somente aprovadas</option>
           <option value="todas"${base==="todas"?" selected":""}>Aprovadas + pendentes</option>
         </select>
-        <button onclick="exportarExcel()" class="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5">Excel</button>
+        <button onclick="exportarExcel()" class="text-sm bg-verde text-white rounded-lg px-3 py-1.5">Excel</button>
         <button onclick="exportarPDF()" class="text-sm bg-rose-600 text-white rounded-lg px-3 py-1.5">PDF</button>
       </div>
     </div>
@@ -936,35 +1011,42 @@ async function viewRelatorio(){
   $("#rl-comp").onchange=e=>{window.__compRel=e.target.value;go("relatorio");};
   $("#rl-base").onchange=e=>{window.__baseRel=e.target.value;go("relatorio");};
 }
-function exportarExcel(){
-  const lista=window.__rel||[];
-  if(!lista.length){toast("Nada para exportar.","info");return;}
+async function exportarExcel(){
   if(!window.XLSX){toast("Biblioteca Excel ainda carregando. Tente de novo em instantes.","err");return;}
+  const {comp,lista}=await relatorioData();
+  if(!lista.length){toast("Nada para exportar.","info");return;}
   const aoa=[["Matrícula","Nome","Setor","Horas extras","Adicional noturno","Justificativa"],
     ...lista.map(x=>[x.matricula,x.nome,x.sigla,Number(x.horas),Number(x.horasNoturno),[...x.justs].join("; ")])];
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"]=[{wch:12},{wch:26},{wch:10},{wch:14},{wch:16},{wch:60}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Horas Extras");
-  XLSX.writeFile(wb, `horas_extras_${window.__compRel||thisMonth()}.xlsx`);
+  XLSX.writeFile(wb, `horas_extras_${comp}.xlsx`);
 }
-function exportarPDF(){
-  const lista=window.__rel||[];
-  if(!lista.length){toast("Nada para exportar.","info");return;}
+async function exportarPDF(){
   if(!window.jspdf){toast("Biblioteca PDF ainda carregando. Tente de novo em instantes.","err");return;}
-  const comp=window.__compRel||thisMonth();
+  const {comp,lista}=await relatorioData();
+  if(!lista.length){toast("Nada para exportar.","info");return;}
   const { jsPDF }=window.jspdf;
   const doc=new jsPDF({unit:"pt",format:"a4"});
   const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight();
-  doc.setFont("helvetica","bold"); doc.setFontSize(15);
-  doc.text("SDU SUL", W/2, 44, {align:"center"});
-  doc.setFontSize(12);
-  doc.text(`Horas Extras Referente ${mesAno(comp)}`, W/2, 64, {align:"center"});
+  // faixa institucional de 4 cores no topo
+  const faixa=[[22,65,148],[0,177,235],[19,181,56],[251,186,0]];
+  const fw=(W-80)/4;
+  faixa.forEach((c,i)=>{ doc.setFillColor(c[0],c[1],c[2]); doc.rect(40+i*fw, 26, fw, 4, "F"); });
+  doc.setTextColor(22,65,148);
+  doc.setFont("helvetica","bold"); doc.setFontSize(16);
+  doc.text("SDU SUL", W/2, 52, {align:"center"});
+  doc.setFont("helvetica","normal"); doc.setFontSize(9);
+  doc.text("Superintendência de Desenvolvimento Urbano - Sul · Prefeitura Municipal de Teresina", W/2, 66, {align:"center"});
+  doc.setTextColor(29,29,27);
+  doc.setFont("helvetica","bold"); doc.setFontSize(12);
+  doc.text(`Horas Extras Referente ${mesAno(comp)}`, W/2, 88, {align:"center"});
   doc.autoTable({
-    startY:86,
+    startY:104,
     head:[["Matrícula","Nome","Setor","Horas extra / Noturno","Justificativa"]],
     body:lista.map(x=>[x.matricula, x.nome, x.sigla, `${hh(x.horas)}/${hh(x.horasNoturno)}`, [...x.justs].join("; ")]),
     styles:{fontSize:8,cellPadding:3,overflow:"linebreak"},
-    headStyles:{fillColor:[79,70,229],textColor:255},
+    headStyles:{fillColor:[22,65,148],textColor:255},
     columnStyles:{0:{cellWidth:60},2:{cellWidth:55},3:{cellWidth:70,halign:"center"},4:{cellWidth:190}},
     margin:{left:40,right:40}
   });
